@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DentaOS Pro | Gestión Dental Inteligente</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#06b6d4">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased selection:bg-cyan-500/30">
+
+  <!-- LOADING OVERLAY -->
+  <div id="globalLoader" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center">
+    <div class="flex flex-col items-center gap-3 bg-slate-900 border border-slate-700 px-6 py-5 rounded-2xl shadow-2xl">
+      <div class="w-9 h-9 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+      <span id="loaderText" class="text-sm font-medium text-slate-300">Sincronizando...</span>
+    </div>
+  </div>
+
+  <!-- TOAST CONTAINER -->
+  <div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm"></div>
+
+  <!-- LOGIN SCREEN -->
+  <div id="loginView" class="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950/30">
+    <div class="glass-card w-full max-w-md rounded-3xl p-8 shadow-2xl">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-12 h-12 rounded-2xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-400">
+          <i data-lucide="sparkles" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight text-white">DentaOS <span class="text-cyan-400">Pro</span></h1>
+          <p class="text-xs text-slate-400">Gestión Dental Inteligente · NOM-004 · ES/EN</p>
+        </div>
+      </div>
+
+      <form id="loginForm" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">PIN de Acceso Profesional</label>
+          <input id="loginPin" type="password" inputmode="numeric" maxlength="8" required placeholder="••••"
+            class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-3.5 text-center text-2xl tracking-[0.5em] text-white focus:outline-none focus:border-cyan-400">
+        </div>
+        <button type="submit" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-3.5 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20">
+          <i data-lucide="lock-open" class="w-5 h-5"></i> Entrar al Consultorio
+        </button>
+      </form>
+      <p class="text-center text-xs text-slate-500 mt-4">Demo PIN Titular: <span class="text-cyan-400 font-mono">1234</span> · Especialista: <span class="text-cyan-400 font-mono">5678</span></p>
+
+      <!-- SUTIL BRANDING XICOSOFT -->
+      <div class="mt-6 pt-5 border-t border-slate-800/80 flex flex-col items-center gap-1.5 xicosoft-badge">
+        <span class="text-[10px] uppercase tracking-[0.2em] text-slate-500">Desarrollado por</span>
+        <img src="assets/xicosoft.gif" onerror="this.src='assets/xicosoft.jpg'" alt="Xicosoft" class="h-11 rounded-lg object-contain">
+      </div>
+    </div>
+  </div>
+
+  <!-- APP SHELL -->
+  <div id="appShell" class="hidden min-h-screen flex flex-col md:flex-row">
+    <!-- SIDEBAR -->
+    <aside class="w-full md:w-64 bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800 flex flex-col justify-between">
+      <div>
+        <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+          <div>
+            <h2 id="clinicNameHeader" class="font-bold text-lg text-white leading-tight">DentaOS Pro</h2>
+            <p id="userBadge" class="text-xs text-cyan-400 mt-0.5"></p>
+          </div>
+          <button onclick="logout()" title="Cerrar sesión" class="p-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800">
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <nav class="p-3 flex md:flex-col gap-1 overflow-x-auto">
+          <button onclick="switchTab('dashboard')" data-tab="dashboard" class="nav-btn flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium bg-cyan-500/15 text-cyan-300">
+            <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Dashboard
+          </button>
+          <button onclick="switchTab('agenda')" data-tab="agenda" class="nav-btn flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white">
+            <i data-lucide="calendar-clock" class="w-4 h-4"></i> Agenda & WhatsApp
+          </button>
+          <button onclick="switchTab('clinico')" data-tab="clinico" class="nav-btn flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white">
+            <i data-lucide="mic" class="w-4 h-4"></i> Odontograma Voz
+          </button>
+          <button onclick="switchTab('finanzas')" data-tab="finanzas" class="nav-btn flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white">
+            <i data-lucide="wallet" class="w-4 h-4"></i> Finanzas MXN/USD
+          </button>
+          <button onclick="switchTab('laboratorio')" data-tab="laboratorio" class="nav-btn flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white">
+            <i data-lucide="flask-conical" class="w-4 h-4"></i> Laboratorio
+          </button>
+          <button onclick="switchTab('config')" data-tab="config" class="nav-btn flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white">
+            <i data-lucide="settings" class="w-4 h-4"></i> Configuración
+          </button>
+        </nav>
+      </div>
+
+      <!-- FOOTER SUTIL XICOSOFT -->
+      <div class="hidden md:flex flex-col items-center p-4 border-t border-slate-800/80 xicosoft-badge">
+        <span class="text-[9px] uppercase tracking-[0.18em] text-slate-500 mb-1">Powered by</span>
+        <img src="assets/xicosoft.jpg" alt="Xicosoft" class="h-9 rounded-md object-contain">
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 p-4 md:p-7 overflow-y-auto space-y-6">
+
+      <!-- TAB: DASHBOARD -->
+      <section id="tab-dashboard" class="tab-panel space-y-6">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 class="text-2xl font-bold text-white">Panel Ejecutivo</h1>
+            <p class="text-sm text-slate-400">Visión en tiempo real de citas, cumplimiento COFEPRIS y cobranza multimoneda.</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button onclick="copyBookingLink()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 text-emerald-300">
+              <i data-lucide="link" class="w-4 h-4"></i> Copiar Liga de Citas
+            </button>
+            <button onclick="openModal('modalPaciente')" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2">
+              <i data-lucide="user-plus" class="w-4 h-4 text-cyan-400"></i> Nuevo Paciente
+            </button>
+            <button onclick="openModal('modalCita')" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
+              <i data-lucide="calendar-plus" class="w-4 h-4"></i> Nueva Cita
+            </button>
+          </div>
+        </div>
+
+        <div id="kpiGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"></div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="glass-card rounded-2xl p-5">
+            <h3 class="font-bold text-white mb-3 flex items-center gap-2">
+              <i data-lucide="shield-alert" class="w-5 h-5 text-amber-400"></i> Auditoría COFEPRIS (NOM-004)
+            </h3>
+            <div id="cofeprisList" class="space-y-2.5 max-h-72 overflow-y-auto"></div>
+          </div>
+          <div class="glass-card rounded-2xl p-5">
+            <h3 class="font-bold text-white mb-3 flex items-center gap-2">
+              <i data-lucide="bell-ring" class="w-5 h-5 text-emerald-400"></i> Pacientes en Recall (+6 meses sin visita)
+            </h3>
+            <div id="recallList" class="space-y-2.5 max-h-72 overflow-y-auto"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB: AGENDA -->
+      <section id="tab-agenda" class="tab-panel hidden space-y-5">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <h1 class="text-2xl font-bold text-white">Agenda Clínica & Recordatorios WhatsApp</h1>
+          <button onclick="openModal('modalCita')" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
+            <i data-lucide="plus" class="w-4 h-4"></i> Agendar Cita
+          </button>
+        </div>
+        <div id="agendaList" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+      </section>
+
+      <!-- TAB: CLÍNICO & ODONTOGRAMA POR VOZ -->
+      <section id="tab-clinico" class="tab-panel hidden space-y-5">
+        <div class="glass-card rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
+          <div class="flex items-center gap-3 flex-1 min-w-[240px]">
+            <label class="text-xs font-bold uppercase text-slate-400">Paciente:</label>
+            <select id="clinicalPatientSelect" onchange="onSelectClinicalPatient()" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"></select>
+          </div>
+          <div id="patientCofeprisBadge" class="text-xs font-bold px-3 py-1.5 rounded-full bg-slate-800 text-slate-300">Selecciona un paciente</div>
+          <div class="flex gap-2">
+            <button onclick="generatePdf('RECETA')" class="bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+              <i data-lucide="file-text" class="w-4 h-4 text-cyan-400"></i> Receta PDF
+            </button>
+            <button onclick="generatePdf('CONSENTIMIENTO')" class="bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+              <i data-lucide="file-signature" class="w-4 h-4 text-emerald-400"></i> Consentimiento PDF
+            </button>
+          </div>
+        </div>
+
+        <!-- PANEL DE EXPLORACIÓN POR VOZ -->
+        <div class="glass-card rounded-2xl p-5 border-cyan-500/40">
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+              <button id="btnVoiceToggle" onclick="toggleVoiceExploration()" class="w-14 h-14 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 flex items-center justify-center shadow-lg transition">
+                <i data-lucide="mic" class="w-7 h-7"></i>
+              </button>
+              <div>
+                <h3 class="font-bold text-white text-base">Exploración Intraoral por Voz (Manos Libres)</h3>
+                <p id="voiceStatusText" class="text-xs text-slate-400 mt-0.5">Ejemplo: "Pieza 16 oclusal caries", "Diente 21 mesial resina", "Pieza 36 ausente"</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <select id="denticionSelect" onchange="renderOdontogram()" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold">
+                <option value="ADULTO">Dentición Adulta (FDI)</option>
+                <option value="INFANTIL">Dentición Infantil (FDI)</option>
+              </select>
+              <select id="conditionBrush" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold">
+                <option value="caries">🔴 Caries</option>
+                <option value="resina">🔵 Resina / Obturación</option>
+                <option value="corona">🟡 Corona</option>
+                <option value="endodoncia">🟣 Endodoncia</option>
+                <option value="implante">🟢 Implante</option>
+                <option value="ausente">⚫ Ausente / Extracción</option>
+                <option value="sano">⚪ Limpiar (Sano)</option>
+              </select>
+              <button onclick="saveCurrentOdontogram()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5">
+                <i data-lucide="save" class="w-4 h-4"></i> Guardar Versión
+              </button>
+            </div>
+          </div>
+          <div id="voiceTranscriptBar" class="hidden mt-3 bg-slate-900/90 border border-cyan-500/30 rounded-xl px-4 py-2.5 text-sm text-cyan-300 flex items-center justify-between">
+            <span id="voiceTranscriptText">Escuchando...</span>
+            <span class="text-xs text-slate-400">Confirmación por voz activa</span>
+          </div>
+        </div>
+
+        <!-- ODONTOGRAMA SVG + COMPARATIVO -->
+        <div class="glass-card rounded-2xl p-5 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h3 class="font-bold text-white text-sm">Odontograma Interactivo (5 Caras por Pieza)</h3>
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-slate-400">Comparar fecha anterior:</label>
+              <select id="historyCompareSelect" onchange="loadHistoricalOdontogram()" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs"></select>
+            </div>
+          </div>
+          <div id="odontogramGrid" class="space-y-6 overflow-x-auto pb-2"></div>
+        </div>
+
+        <!-- NOTAS DE EVOLUCIÓN + RADIOGRAFÍAS DRIVE -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="glass-card rounded-2xl p-5 space-y-3">
+            <h3 class="font-bold text-white text-sm">Nueva Nota de Evolución (NOM-004)</h3>
+            <input id="notaProc" type="text" placeholder="Procedimiento realizado (ej. Resina Oclusal P16)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm">
+            <input id="notaSignos" type="text" placeholder="Signos vitales (ej. TA 120/80, FC 72)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm">
+            <textarea id="notaObs" rows="3" placeholder="Observaciones clínicas y prescripción..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm"></textarea>
+            <label class="flex items-center gap-2 text-xs text-slate-300">
+              <input id="notaConsentCheck" type="checkbox" class="rounded bg-slate-900 border-slate-600"> Marcar Consentimiento Informado como firmado
+            </label>
+            <button onclick="saveNotaEvolucion()" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-sm">Registrar Nota</button>
+            <div id="notasList" class="space-y-2 pt-2 max-h-48 overflow-y-auto"></div>
+          </div>
+
+          <div class="glass-card rounded-2xl p-5 space-y-3">
+            <h3 class="font-bold text-white text-sm">Radiografías & Fotos Intraorales (Google Drive)</h3>
+            <div class="flex gap-2">
+              <select id="fotoCategoria" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs">
+                <option value="Radiografía Panorámica">Radiografía Panorámica</option>
+                <option value="Periapical">Periapical</option>
+                <option value="Foto Intraoral">Foto Intraoral</option>
+              </select>
+              <input id="fotoInput" type="file" accept="image/*" capture="environment" class="flex-1 text-xs text-slate-300 file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-slate-800 file:text-cyan-400">
+            </div>
+            <button onclick="uploadCompressedPhoto()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-sm flex items-center gap-2">
+              <i data-lucide="upload-cloud" class="w-4 h-4"></i> Comprimir y Subir a Drive
+            </button>
+            <div id="archivosList" class="space-y-2 pt-2 max-h-56 overflow-y-auto"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB: FINANZAS MXN/USD -->
+      <section id="tab-finanzas" class="tab-panel hidden space-y-5">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 class="text-2xl font-bold text-white">Finanzas Multimoneda (MXN / USD) & Honorarios</h1>
+            <p class="text-xs text-slate-400">Tipo de cambio actual del consultorio: <span id="tcDisplay" class="text-emerald-400 font-bold">$19.50 MXN/USD</span></p>
+          </div>
+          <button onclick="openModal('modalFinanzas')" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
+            <i data-lucide="dollar-sign" class="w-4 h-4"></i> Nuevo Presupuesto / Cobro
+          </button>
+        </div>
+        <div class="glass-card rounded-2xl overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-slate-900/90 text-xs uppercase text-slate-400 border-b border-slate-800">
+              <tr>
+                <th class="p-3.5">Fecha</th>
+                <th class="p-3.5">Paciente</th>
+                <th class="p-3.5">Concepto</th>
+                <th class="p-3.5">Moneda</th>
+                <th class="p-3.5 text-right">Total</th>
+                <th class="p-3.5 text-right">Abonado</th>
+                <th class="p-3.5 text-right">Honorario Doc (MXN)</th>
+                <th class="p-3.5">PDF</th>
+              </tr>
+            </thead>
+            <tbody id="finanzasTableBody" class="divide-y divide-slate-800/70"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB: LABORATORIO -->
+      <section id="tab-laboratorio" class="tab-panel hidden space-y-5">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <h1 class="text-2xl font-bold text-white">Control de Laboratorio Dental</h1>
+          <button onclick="openModal('modalLab')" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
+            <i data-lucide="plus" class="w-4 h-4"></i> Nueva Orden de Lab
+          </button>
+        </div>
+        <div id="labList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+      </section>
+
+      <!-- TAB: CONFIGURACIÓN -->
+      <section id="tab-config" class="tab-panel hidden space-y-5 max-w-2xl">
+        <h1 class="text-2xl font-bold text-white">Configuración del Consultorio</h1>
+        <form id="configForm" class="glass-card rounded-2xl p-6 space-y-4">
+          <div>
+            <label class="text-xs text-slate-400">Nombre de la Clínica</label>
+            <input id="cfgNombre" type="text" required class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm">
+          </div>
+          <div>
+            <label class="text-xs text-slate-400">Dirección</label>
+            <input id="cfgDireccion" type="text" class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm">
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="text-xs text-slate-400">Teléfono</label>
+              <input id="cfgTelefono" type="text" class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm">
+            </div>
+            <div>
+              <label class="text-xs text-slate-400">Tipo de Cambio USD → MXN</label>
+              <input id="cfgTC" type="number" step="0.01" required class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm">
+            </div>
+          </div>
+          <div>
+            <label class="text-xs text-slate-400">Webhook Google Chat / Slack (Opcional)</label>
+            <input id="cfgWebhook" type="url" placeholder="https://chat.googleapis.com/..." class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm">
+          </div>
+          <button type="submit" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-5 py-2.5 rounded-xl text-sm">Guardar Cambios</button>
+        </form>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- MODALES -->
+  <div id="modalPaciente" class="hidden fixed inset-0 z-40 bg-slate-950/80 flex items-center justify-center p-4">
+    <div class="glass-card w-full max-w-lg rounded-2xl p-6 space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="font-bold text-lg text-white">Registrar Paciente</h3>
+        <button onclick="closeModal('modalPaciente')" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <form id="formPaciente" class="space-y-3">
+        <input id="pacNombre" required placeholder="Nombre completo" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm">
+        <div class="grid grid-cols-2 gap-3">
+          <input id="pacTel" required placeholder="WhatsApp (ej. 526561234567)" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm">
+          <select id="pacIdioma" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm">
+            <option value="ES">🇲🇽 Español (MX)</option>
+            <option value="EN">🇺🇸 English (US/Border)</option>
+          </select>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <input id="pacEmail" type="email" placeholder="Correo electrónico" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm">
+          <input id="pacNac" type="date" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm">
+        </div>
+        <input id="pacAlergias" placeholder="Alergias (ej. Penicilina, Látex, Ninguna)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm">
+        <input id="pacAntecedentes" placeholder="Antecedentes patológicos (Diabetes, HTA, etc.)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm">
+        <button type="submit" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-2.5 rounded-xl text-sm">Guardar Paciente</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="modalCita" class="hidden fixed inset-0 z-40 bg-slate-950/80 flex items-center justify-center p-4">
+    <div class="glass-card w-full max-w-lg rounded-2xl p-6 space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="font-bold text-lg text-white">Agendar Nueva Cita</h3>
+        <button onclick="closeModal('modalCita')" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <form id="formCita" class="space-y-3">
+        <select id="citaPaciente" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm"></select>
+        <div class="grid grid-cols-2 gap-3">
+          <select id="citaDoctor" required class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm"></select>
+          <select id="citaUnidad" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm">
+            <option value="Sillón 1">Sillón 1</option>
+            <option value="Sillón 2">Sillón 2</option>
+            <option value="Quirófano">Quirófano</option>
+          </select>
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          <input id="citaFecha" type="date" required class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm">
+          <input id="citaHora" type="time" required value="10:00" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm">
+          <input id="citaDuracion" type="number" value="45" min="15" step="15" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm" placeholder="Min">
+        </div>
+        <input id="citaMotivo" required placeholder="Motivo (ej. Limpieza + Valoración)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm">
+        <label class="flex items-center gap-2 text-xs text-slate-300">
+          <input id="citaSyncCal" type="checkbox" checked> Sincronizar automáticamente en Google Calendar
+        </label>
+        <button type="submit" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-2.5 rounded-xl text-sm">Confirmar Cita</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="modalFinanzas" class="hidden fixed inset-0 z-40 bg-slate-950/80 flex items-center justify-center p-4">
+    <div class="glass-card w-full max-w-lg rounded-2xl p-6 space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="font-bold text-lg text-white">Presupuesto / Cobro Multimoneda</h3>
+        <button onclick="closeModal('modalFinanzas')" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <form id="formFinanzas" class="space-y-3">
+        <select id="finPaciente" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm"></select>
+        <select id="finDoctor" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm"></select>
+        <input id="finConcepto" required placeholder="Concepto (ej. Corona Zirconia P16)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm">
+        <div class="grid grid-cols-3 gap-3">
+          <select id="finMoneda" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm">
+            <option value="MXN">MXN ($)</option>
+            <option value="USD">USD ($)</option>
+          </select>
+          <input id="finTotal" type="number" step="0.01" required placeholder="Total" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm">
+          <input id="finAbonado" type="number" step="0.01" required placeholder="Abono hoy" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm">
+        </div>
+        <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-2.5 rounded-xl text-sm">Guardar Movimiento</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="modalLab" class="hidden fixed inset-0 z-40 bg-slate-950/80 flex items-center justify-center p-4">
+    <div class="glass-card w-full max-w-lg rounded-2xl p-6 space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="font-bold text-lg text-white">Nueva Orden de Laboratorio</h3>
+        <button onclick="closeModal('modalLab')" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <form id="formLab" class="space-y-3">
+        <select id="labPaciente" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm"></select>
+        <input id="labNombre" required placeholder="Nombre del Laboratorio (ej. Lab Dental Frontera)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm">
+        <input id="labTrabajo" required placeholder="Trabajo (ej. Corona Zirconia Monolítica)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm">
+        <div class="grid grid-cols-3 gap-3">
+          <input id="labColor" placeholder="Color/Pieza (A2 / P16)" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm">
+          <input id="labEntrega" type="date" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm">
+          <input id="labCosto" type="number" step="0.01" placeholder="Costo MXN" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm">
+        </div>
+        <button type="submit" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-2.5 rounded-xl text-sm">Registrar Orden</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
