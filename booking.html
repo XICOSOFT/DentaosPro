@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agendar Cita | DentaOS Pro</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950/30 text-slate-100 font-sans antialiased p-4 md:p-8 flex flex-col items-center justify-center">
+
+  <div class="w-full max-w-2xl space-y-5">
+    <!-- HEADER DEL CONSULTORIO -->
+    <div class="glass-card rounded-3xl p-6 flex flex-wrap items-center justify-between gap-4 shadow-2xl">
+      <div class="flex items-center gap-3.5">
+        <div class="w-12 h-12 rounded-2xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-400">
+          <i data-lucide="calendar-heart" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h1 id="clinicTitle" class="text-xl font-bold text-white">Cargando consultorio...</h1>
+          <p id="clinicAddress" class="text-xs text-slate-400 mt-0.5"></p>
+        </div>
+      </div>
+      <div class="flex bg-slate-900 border border-slate-700 rounded-xl p-1 text-xs font-bold">
+        <button id="btnLangES" onclick="setLang('ES')" class="px-3 py-1.5 rounded-lg bg-cyan-500 text-slate-950">🇲🇽 ES</button>
+        <button id="btnLangEN" onclick="setLang('EN')" class="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white">🇺🇸 EN</button>
+      </div>
+    </div>
+
+    <!-- FORMULARIO DE RESERVA -->
+    <div id="bookingCard" class="glass-card rounded-3xl p-6 md:p-8 shadow-2xl space-y-6">
+      <div id="errorBanner" class="hidden bg-red-500/15 border border-red-500/40 text-red-300 text-xs font-semibold px-4 py-3 rounded-xl"></div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label data-i18n="lblDoctor" class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">1. Especialista</label>
+          <select id="doctorSelect" onchange="loadSlots()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-3 text-sm text-white focus:outline-none focus:border-cyan-400"></select>
+        </div>
+        <div>
+          <label data-i18n="lblDate" class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">2. Fecha</label>
+          <input id="dateInput" type="date" onchange="loadSlots()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-3 text-sm text-white focus:outline-none focus:border-cyan-400">
+        </div>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <label data-i18n="lblSlots" class="block text-xs font-bold uppercase tracking-wider text-slate-400">3. Horarios Disponibles</label>
+          <span id="slotsLoading" class="hidden text-xs text-cyan-400 animate-pulse">Consultando agenda...</span>
+        </div>
+        <div id="slotsGrid" class="grid grid-cols-3 sm:grid-cols-4 gap-2.5"></div>
+      </div>
+
+      <form id="bookingForm" class="space-y-4 pt-4 border-t border-slate-800">
+        <p data-i18n="lblPatient" class="text-xs font-bold uppercase tracking-wider text-slate-400">4. Tus Datos</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          <input id="pacNombre" required placeholder="Nombre completo / Full name" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-3 text-sm text-white focus:outline-none focus:border-cyan-400">
+          <input id="pacTelefono" required type="tel" placeholder="WhatsApp (10 dígitos / digits)" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-3 text-sm text-white focus:outline-none focus:border-cyan-400">
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          <input id="pacEmail" type="email" placeholder="Correo electrónico (opcional)" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-3 text-sm text-white focus:outline-none focus:border-cyan-400">
+          <select id="pacMotivo" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-3 text-sm text-white focus:outline-none focus:border-cyan-400">
+            <option value="Limpieza y Valoración / Cleaning & Checkup">Limpieza y Valoración / Cleaning</option>
+            <option value="Dolor o Urgencia / Emergency">Dolor o Urgencia / Emergency</option>
+            <option value="Ortodoncia / Braces">Ortodoncia / Braces</option>
+            <option value="Implantes o Coronas / Implants & Crowns">Implantes o Coronas / Implants</option>
+            <option value="Blanqueamiento / Whitening">Blanqueamiento / Whitening</option>
+          </select>
+        </div>
+
+        <button id="btnSubmit" type="submit" class="w-full bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-950 font-bold py-3.5 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20">
+          <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+          <span data-i18n="btnConfirm">Confirmar Cita</span>
+        </button>
+      </form>
+    </div>
+
+    <!-- PANTALLA DE CONFIRMACIÓN -->
+    <div id="successCard" class="hidden glass-card rounded-3xl p-8 text-center space-y-5 shadow-2xl border-emerald-500/40">
+      <div class="w-16 h-16 mx-auto rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+        <i data-lucide="check" class="w-9 h-9"></i>
+      </div>
+      <div>
+        <h2 data-i18n="okTitle" class="text-2xl font-bold text-white">¡Cita Confirmada!</h2>
+        <p id="okSummary" class="text-sm text-slate-300 mt-2"></p>
+      </div>
+      <div class="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+        <a id="waConfirmBtn" href="#" target="_blank" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-5 py-3 rounded-xl text-sm flex items-center justify-center gap-2">
+          <i data-lucide="message-circle" class="w-4 h-4"></i> <span data-i18n="btnWa">Avisar por WhatsApp</span>
+        </a>
+        <button onclick="location.reload()" class="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-5 py-3 rounded-xl text-sm">
+          <span data-i18n="btnAnother">Agendar otra cita</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- FOOTER SUTIL XICOSOFT -->
+    <footer class="pt-2 flex items-center justify-center gap-2.5 xicosoft-badge">
+      <span class="text-[11px] text-slate-500">Agenda inteligente por</span>
+      <img src="assets/xicosoft.jpg" alt="Xicosoft" class="h-7 rounded-md object-contain">
+    </footer>
+  </div>
+
+  <script>
+    const API_URL = 'https://script.google.com/macros/s/AKfycbxWtJRZLdqe19FY9juUoTp1i6p7FKQ-rnUwpp9dIeQ6_epXc_HkBMz20vWmvnkN36uFSQ/exec';
+    const urlParams = new URLSearchParams(window.location.search);
+    const CLINIC_ID = urlParams.get('clinic') || 'CLINIC-001';
+    let LANG = 'ES';
+    let SELECTED_SLOT = '';
+
+    const I18N = {
+      ES: {
+        lblDoctor: '1. Especialista',
+        lblDate: '2. Fecha',
+        lblSlots: '3. Horarios Disponibles',
+        lblPatient: '4. Tus Datos',
+        btnConfirm: 'Confirmar Cita',
+        okTitle: '¡Cita Confirmada!',
+        btnWa: 'Avisar por WhatsApp',
+        btnAnother: 'Agendar otra cita',
+        noSlots: 'No hay horarios disponibles para esta fecha (domingos cerrado).',
+        pickSlot: 'Por favor selecciona un horario disponible.'
+      },
+      EN: {
+        lblDoctor: '1. Specialist',
+        lblDate: '2. Date',
+        lblSlots: '3. Available Time Slots',
+        lblPatient: '4. Your Information',
+        btnConfirm: 'Confirm Appointment',
+        okTitle: 'Appointment Confirmed!',
+        btnWa: 'Confirm via WhatsApp',
+        btnAnother: 'Book another appointment',
+        noSlots: 'No available time slots for this date (closed on Sundays).',
+        pickSlot: 'Please select an available time slot.'
+      }
+    };
+
+    async function callApi(action, ...args) {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: action, args: args })
+      });
+      return await response.json();
+    }
+
+    function setLang(lang) {
+      LANG = lang;
+      document.getElementById('btnLangES').className = lang === 'ES' ? 'px-3 py-1.5 rounded-lg bg-cyan-500 text-slate-950' : 'px-3 py-1.5 rounded-lg text-slate-400';
+      document.getElementById('btnLangEN').className = lang === 'EN' ? 'px-3 py-1.5 rounded-lg bg-cyan-500 text-slate-950' : 'px-3 py-1.5 rounded-lg text-slate-400';
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (I18N[LANG][key]) el.textContent = I18N[LANG][key];
+      });
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('errorBanner');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+    }
+
+    function hideError() {
+      document.getElementById('errorBanner').classList.add('hidden');
+    }
+
+    async function initPortal() {
+      const today = new Date().toISOString().split('T')[0];
+      const dateInput = document.getElementById('dateInput');
+      dateInput.min = today;
+      dateInput.value = today;
+
+      try {
+        const res = await callApi('apiPublicGetBookingInit', CLINIC_ID);
+        if (res.status === 'error') return showError(res.message);
+        document.getElementById('clinicTitle').textContent = res.data.consultorio.Nombre;
+        document.getElementById('clinicAddress').textContent = res.data.consultorio.Direccion;
+
+        const docSel = document.getElementById('doctorSelect');
+        docSel.innerHTML = res.data.doctores.map(d => `<option value="${d.Usuario_ID}">${d.Nombre}</option>`).join('');
+        loadSlots();
+      } catch (err) {
+        showError('Error de conexión con el consultorio.');
+      }
+    }
+
+    async function loadSlots() {
+      hideError();
+      SELECTED_SLOT = '';
+      const docId = document.getElementById('doctorSelect').value;
+      const dateStr = document.getElementById('dateInput').value;
+      if (!docId || !dateStr) return;
+
+      document.getElementById('slotsLoading').classList.remove('hidden');
+      document.getElementById('slotsGrid').innerHTML = '';
+
+      try {
+        const res = await callApi('apiPublicGetAvailableSlots', CLINIC_ID, docId, dateStr);
+        document.getElementById('slotsLoading').classList.add('hidden');
+        if (res.status === 'error') return showError(res.message);
+
+        const slots = res.data.slots || [];
+        const grid = document.getElementById('slotsGrid');
+        if (!slots.length) {
+          grid.innerHTML = `<p class="col-span-full text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">${I18N[LANG].noSlots}</p>`;
+          return;
+        }
+
+        grid.innerHTML = slots.map(s => `
+          <button type="button" onclick="selectSlot('${s}', this)" class="slot-btn bg-slate-900 hover:border-cyan-400 border border-slate-700 rounded-xl py-2.5 text-sm font-mono font-bold text-slate-200 transition">
+            ${s}
+          </button>
+        `).join('');
+      } catch (err) {
+        document.getElementById('slotsLoading').classList.add('hidden');
+        showError('No se pudieron cargar los horarios.');
+      }
+    }
+
+    function selectSlot(slot, btnEl) {
+      SELECTED_SLOT = slot;
+      document.querySelectorAll('.slot-btn').forEach(b => {
+        b.classList.remove('bg-cyan-500', 'text-slate-950', 'border-cyan-400');
+        b.classList.add('bg-slate-900', 'text-slate-200', 'border-slate-700');
+      });
+      btnEl.classList.remove('bg-slate-900', 'text-slate-200', 'border-slate-700');
+      btnEl.classList.add('bg-cyan-500', 'text-slate-950', 'border-cyan-400');
+      hideError();
+    }
+
+    document.getElementById('bookingForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideError();
+      if (!SELECTED_SLOT) return showError(I18N[LANG].pickSlot);
+
+      const btn = document.getElementById('btnSubmit');
+      btn.disabled = true;
+
+      try {
+        const res = await callApi('apiPublicBookAppointment', {
+          Consultorio_ID: CLINIC_ID,
+          Doctor_ID: document.getElementById('doctorSelect').value,
+          Fecha: document.getElementById('dateInput').value,
+          Hora_Inicio: SELECTED_SLOT,
+          Nombre: document.getElementById('pacNombre').value,
+          Telefono: document.getElementById('pacTelefono').value,
+          Email: document.getElementById('pacEmail').value,
+          Motivo: document.getElementById('pacMotivo').value,
+          Idioma: LANG
+        });
+
+        btn.disabled = false;
+        if (res.status === 'error') {
+          showError(res.message);
+          loadSlots();
+          return;
+        }
+
+        const c = res.data.cita;
+        const cl = res.data.consultorio;
+        document.getElementById('bookingCard').classList.add('hidden');
+        document.getElementById('successCard').classList.remove('hidden');
+
+        document.getElementById('okSummary').innerHTML = LANG === 'EN'
+          ? `<strong>${c.Paciente_Nombre}</strong>, your appointment with <strong>${c.Doctor_Nombre}</strong> is booked for <strong>${c.Fecha} at ${c.Hora_Inicio}</strong> at ${cl.Nombre}.`
+          : `<strong>${c.Paciente_Nombre}</strong>, tu cita con <strong>${c.Doctor_Nombre}</strong> quedó registrada para el <strong>${c.Fecha} a las ${c.Hora_Inicio}</strong> en ${cl.Nombre}.`;
+
+        const waText = LANG === 'EN'
+          ? `Hi ${cl.Nombre}, I just booked my dental appointment for ${c.Fecha} at ${c.Hora_Inicio} with ${c.Doctor_Nombre}. Name: ${c.Paciente_Nombre}.`
+          : `Hola ${cl.Nombre}, acabo de agendar mi cita para el ${c.Fecha} a las ${c.Hora_Inicio} con ${c.Doctor_Nombre}. Soy ${c.Paciente_Nombre}.`;
+
+        document.getElementById('waConfirmBtn').href = `https://wa.me/${String(cl.Telefono).replace(/\D/g, '')}?text=${encodeURIComponent(waText)}`;
+        lucide.createIcons();
+      } catch (err) {
+        btn.disabled = false;
+        showError('Error al confirmar la cita. Intenta nuevamente.');
+      }
+    });
+
+    initPortal();
+    lucide.createIcons();
+  </script>
+</body>
+</html>
