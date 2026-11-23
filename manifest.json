@@ -1,0 +1,15 @@
+{
+  "name": "DentaOS Pro | by Xicosoft",
+  "short_name": "DentaOS Pro",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#06b6d4",
+  "icons": [
+    {
+      "src": "assets/xicosoft.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}
