@@ -152,7 +152,7 @@
         <div id="agendaList" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
       </section>
 
-      <!-- TAB: CLÍNICO & ODONTOGRAMA POR VOZ -->
+      <!-- TAB: CLÍNICO & ODONTOGRAMA ANATÓMICO POR VOZ -->
       <section id="tab-clinico" class="tab-panel hidden space-y-5">
         <div class="glass-card rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
           <div class="flex items-center gap-3 flex-1 min-w-[240px]">
@@ -179,10 +179,10 @@
               </button>
               <div>
                 <h3 class="font-bold text-white text-base">Exploración Intraoral por Voz (Manos Libres)</h3>
-                <p id="voiceStatusText" class="text-xs text-slate-400 mt-0.5">Ejemplo: "Pieza 16 oclusal caries", "Diente 21 mesial resina", "Pieza 36 ausente"</p>
+                <p id="voiceStatusText" class="text-xs text-slate-400 mt-0.5">Ejemplo: "Pieza 16 oclusal caries", "Diente 21 mesial resina", "Pieza 36 implante"</p>
               </div>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
               <select id="denticionSelect" onchange="renderOdontogram()" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold">
                 <option value="ADULTO">Dentición Adulta (FDI)</option>
                 <option value="INFANTIL">Dentición Infantil (FDI)</option>
@@ -207,16 +207,43 @@
           </div>
         </div>
 
-        <!-- ODONTOGRAMA SVG + COMPARATIVO -->
+        <!-- ODONTOGRAMA ANATÓMICO SVG + LEYENDA + RESUMEN -->
         <div class="glass-card rounded-2xl p-5 space-y-4">
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <h3 class="font-bold text-white text-sm">Odontograma Interactivo (5 Caras por Pieza)</h3>
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 class="font-bold text-white text-sm">Odontograma Anatómico Interactivo (FDI · 5 Caras)</h3>
+              <div class="flex flex-wrap items-center gap-3 mt-1.5 text-[11px] text-slate-400">
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span> Caries</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Resina</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-yellow-400"></span> Corona</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span> Endodoncia (Raíz)</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Implante</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-slate-950 border border-red-500"></span> Ausente</span>
+              </div>
+            </div>
             <div class="flex items-center gap-2">
-              <label class="text-xs text-slate-400">Comparar fecha anterior:</label>
+              <label class="text-xs text-slate-400">Comparar fecha:</label>
               <select id="historyCompareSelect" onchange="loadHistoricalOdontogram()" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs"></select>
             </div>
           </div>
+
           <div id="odontogramGrid" class="space-y-6 overflow-x-auto pb-2"></div>
+
+          <!-- PANEL DE RESUMEN AUTOMÁTICO + COTIZAR HALLAZGOS -->
+          <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="flex-1">
+              <p class="text-[11px] uppercase tracking-wider font-bold text-cyan-400 mb-1">Resumen Clínico Detectado</p>
+              <p id="findingsSummaryText" class="text-xs text-slate-300 leading-relaxed">Sin hallazgos registrados en el odontograma actual.</p>
+            </div>
+            <div class="flex flex-wrap gap-2 shrink-0">
+              <button onclick="copyFindingsToNote()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+                <i data-lucide="clipboard-plus" class="w-4 h-4 text-cyan-400"></i> Pasar a Nota
+              </button>
+              <button onclick="quoteFindingsToFinance()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-500/20">
+                <i data-lucide="receipt" class="w-4 h-4"></i> Cotizar Hallazgos
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- NOTAS DE EVOLUCIÓN + RADIOGRAFÍAS DRIVE -->
