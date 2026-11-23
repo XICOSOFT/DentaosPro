@@ -1,5 +1,5 @@
 /**
- * DentaOS Pro - Frontend Controller (app.js)
+ * DentaOS Pro - Frontend Controller con Odontograma Anatómico SVG (app.js)
  * Desarrollado por Xicosoft
  */
 
@@ -31,6 +31,24 @@ const CONDITION_COLORS = {
   ausente: '#020617'
 };
 
+const FACE_LABELS = {
+  V: 'Vestibular',
+  L: 'Lingual',
+  M: 'Mesial',
+  D: 'Distal',
+  O: 'Oclusal'
+};
+
+// Tarifas base sugeridas en MXN para pre-cotización rápida desde Odontograma
+const BASE_PRICES_MXN = {
+  caries: 850,
+  resina: 900,
+  corona: 4500,
+  endodoncia: 3200,
+  implante: 14000,
+  ausente: 0
+};
+
 const ADULT_ROWS = [
   ['18','17','16','15','14','13','12','11', '21','22','23','24','25','26','27','28'],
   ['48','47','46','45','44','43','42','41', '31','32','33','34','35','36','37','38']
@@ -41,7 +59,6 @@ const CHILD_ROWS = [
   ['85','84','83','82','81', '71','72','73','74','75']
 ];
 
-// Cliente API REST hacia Google Apps Script (sin preflight CORS)
 async function runServer(action, ...args) {
   showLoader(true, 'Sincronizando...');
   try {
@@ -237,7 +254,10 @@ async function changeCitaStatus(citaId, status) {
   await hydrateApp();
 }
 
-// ODONTOGRAMA FDI + VOZ
+// ============================================================================
+// ODONTOGRAMA ANATÓMICO SVG + RESUMEN AUTOMÁTICO + VOZ
+// ============================================================================
+
 function onSelectClinicalPatient() {
   const pacId = document.getElementById('clinicalPatientSelect').value;
   const pac = STATE.pacientes.find(p => p.Paciente_ID === pacId);
@@ -274,37 +294,121 @@ function loadHistoricalOdontogram() {
   }
 }
 
+function getToothCategory(num) {
+  const unit = Number(String(num).slice(-1));
+  if (unit === 1 || unit === 2) return 'incisor';
+  if (unit === 3) return 'canine';
+  if (unit === 4 || unit === 5) return 'premolar';
+  return 'molar';
+}
+
+function buildAnatomicalSilhouetteSvg(num, toothState, isLower) {
+  const cat = getToothCategory(num);
+  const faces = [toothState.V, toothState.L, toothState.M, toothState.D, toothState.O];
+  const isAusente = toothState.whole === 'ausente';
+  const hasCorona = faces.every(f => f === 'corona');
+  const hasImplante = faces.every(f => f === 'implante');
+  const hasEndo = faces.includes('endodoncia');
+
+  const crownFill = hasCorona ? 'rgba(234, 179, 8, 0.35)' : '#1e293b';
+  const crownStroke = hasCorona ? '#eab308' : '#64748b';
+  const rootStroke = '#475569';
+  const opacity = isAusente ? '0.25' : '1';
+  const flipTransform = isLower ? 'transform="translate(0, 64) scale(1, -1)"' : '';
+
+  let rootPath = '';
+  let crownPath = '';
+  let endoPath = '';
+
+  if (cat === 'incisor') {
+    rootPath = `<path d="M22,34 Q25,8 30,6 Q35,8 38,34 Z" fill="#0f172a" stroke="${rootStroke}" stroke-width="1.6"/>`;
+    crownPath = `<path d="M18,34 Q18,58 30,58 Q42,58 42,34 Z" fill="${crownFill}" stroke="${crownStroke}" stroke-width="1.8"/>`;
+    endoPath = `<line x1="30" y1="10" x2="30" y2="44" stroke="#a855f7" stroke-width="2.5" stroke-linecap="round"/>`;
+  } else if (cat === 'canine') {
+    rootPath = `<path d="M21,34 Q24,4 30,2 Q36,4 39,34 Z" fill="#0f172a" stroke="${rootStroke}" stroke-width="1.6"/>`;
+    crownPath = `<path d="M17,34 Q17,52 30,60 Q43,52 43,34 Z" fill="${crownFill}" stroke="${crownStroke}" stroke-width="1.8"/>`;
+    endoPath = `<line x1="30" y1="6" x2="30" y2="46" stroke="#a855f7" stroke-width="2.5" stroke-linecap="round"/>`;
+  } else if (cat === 'premolar') {
+    rootPath = `<path d="M19,34 Q21,10 25,8 Q28,12 30,24 Q32,12 35,8 Q39,10 41,34 Z" fill="#0f172a" stroke="${rootStroke}" stroke-width="1.6"/>`;
+    crownPath = `<path d="M15,34 Q15,56 24,58 Q30,54 36,58 Q45,56 45,34 Z" fill="${crownFill}" stroke="${crownStroke}" stroke-width="1.8"/>`;
+    endoPath = `<path d="M25,12 L27,42 M35,12 L33,42" stroke="#a855f7" stroke-width="2.2" stroke-linecap="round"/>`;
+  } else {
+    // Molar (3 raíces)
+    rootPath = `<path d="M13,34 Q13,10 19,8 Q24,10 26,24 Q28,10 30,8 Q32,10 34,24 Q36,10 41,8 Q47,10 47,34 Z" fill="#0f172a" stroke="${rootStroke}" stroke-width="1.6"/>`;
+    crownPath = `<path d="M10,34 Q10,56 22,58 Q30,53 38,58 Q50,56 50,34 Z" fill="${crownFill}" stroke="${crownStroke}" stroke-width="1.8"/>`;
+    endoPath = `<path d="M19,12 L22,42 M30,12 L30,42 M41,12 L38,42" stroke="#a855f7" stroke-width="2.2" stroke-linecap="round"/>`;
+  }
+
+  // Si es implante, sustituir raíz por tornillo de titanio
+  if (hasImplante) {
+    rootPath = `
+      <rect x="24" y="8" width="12" height="26" rx="3" fill="#064e3b" stroke="#10b981" stroke-width="1.8"/>
+      <line x1="23" y1="14" x2="37" y2="14" stroke="#34d399" stroke-width="1.6"/>
+      <line x1="23" y1="20" x2="37" y2="20" stroke="#34d399" stroke-width="1.6"/>
+      <line x1="23" y1="26" x2="37" y2="26" stroke="#34d399" stroke-width="1.6"/>
+    `;
+  }
+
+  return `
+    <svg viewBox="0 0 60 64" class="w-11 h-12 select-none" onclick="paintTooth('${num}','O')" title="Pieza ${num} (${cat})">
+      <g ${flipTransform} opacity="${opacity}">
+        ${rootPath}
+        ${crownPath}
+        ${hasEndo && !hasImplante ? endoPath : ''}
+      </g>
+      ${isAusente ? '<line x1="12" y1="12" x2="48" y2="52" stroke="#ef4444" stroke-width="4.5" stroke-linecap="round"/><line x1="48" y1="12" x2="12" y2="52" stroke="#ef4444" stroke-width="4.5" stroke-linecap="round"/>' : ''}
+    </svg>
+  `;
+}
+
 function renderOdontogram() {
   const tipo = document.getElementById('denticionSelect').value;
   const rows = tipo === 'INFANTIL' ? CHILD_ROWS : ADULT_ROWS;
+  const midIdx = tipo === 'INFANTIL' ? 5 : 8;
   const container = document.getElementById('odontogramGrid');
 
-  container.innerHTML = rows.map((row, rIdx) => `
-    <div>
-      <p class="text-[11px] uppercase tracking-wider text-slate-500 mb-2">${rIdx === 0 ? 'Arcada Superior' : 'Arcada Inferior'}</p>
-      <div class="flex gap-1.5 min-w-max">
-        ${row.map(num => buildToothSvgCard(num)).join('')}
+  container.innerHTML = rows.map((row, rIdx) => {
+    const isLower = rIdx === 1;
+    const leftQuad = row.slice(0, midIdx);
+    const rightQuad = row.slice(midIdx);
+    const label = isLower ? 'Arcada Inferior (Q4 Derecha | Q3 Izquierda)' : 'Arcada Superior (Q1 Derecha | Q2 Izquierda)';
+
+    return `
+      <div>
+        <p class="text-[11px] uppercase tracking-wider text-slate-500 mb-2 font-semibold">${label}</p>
+        <div class="flex items-stretch gap-1.5 min-w-max">
+          ${leftQuad.map(num => buildToothSvgCard(num, isLower)).join('')}
+          <div class="quadrant-divider"></div>
+          ${rightQuad.map(num => buildToothSvgCard(num, isLower)).join('')}
+        </div>
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
+
+  updateFindingsSummary();
 }
 
-function buildToothSvgCard(num) {
+function buildToothSvgCard(num, isLower) {
   const t = STATE.odontogramData[num] || { V: 'sano', L: 'sano', M: 'sano', D: 'sano', O: 'sano', whole: '' };
   const isAusente = t.whole === 'ausente';
   const fill = (face) => isAusente ? CONDITION_COLORS.ausente : (CONDITION_COLORS[t[face]] || CONDITION_COLORS.sano);
 
+  const silhouette = buildAnatomicalSilhouetteSvg(num, t, isLower);
+  const diagram5Faces = `
+    <svg viewBox="0 0 100 100" class="w-10 h-10">
+      <polygon points="0,0 100,0 75,25 25,25" fill="${fill('V')}" class="tooth-surface" onclick="paintTooth('${num}','V')" title="Vestibular"></polygon>
+      <polygon points="100,0 100,100 75,75 75,25" fill="${fill('D')}" class="tooth-surface" onclick="paintTooth('${num}','D')" title="Distal"></polygon>
+      <polygon points="0,100 100,100 75,75 25,75" fill="${fill('L')}" class="tooth-surface" onclick="paintTooth('${num}','L')" title="Lingual/Palatina"></polygon>
+      <polygon points="0,0 25,25 25,75 0,100" fill="${fill('M')}" class="tooth-surface" onclick="paintTooth('${num}','M')" title="Mesial"></polygon>
+      <rect x="25" y="25" width="50" height="50" fill="${fill('O')}" class="tooth-surface" onclick="paintTooth('${num}','O')" title="Oclusal/Incisal"></rect>
+      ${isAusente ? '<line x1="12" y1="12" x2="88" y2="88" stroke="#ef4444" stroke-width="8"/><line x1="88" y1="12" x2="12" y2="88" stroke="#ef4444" stroke-width="8"/>' : ''}
+    </svg>
+  `;
+
   return `
-    <div id="tooth-${num}" class="tooth-card bg-slate-900 border border-slate-800 rounded-xl p-1.5 flex flex-col items-center w-[54px]">
-      <span class="text-[11px] font-mono font-bold text-slate-300 mb-1">${num}</span>
-      <svg viewBox="0 0 100 100" class="w-10 h-10">
-        <polygon points="0,0 100,0 75,25 25,25" fill="${fill('V')}" class="tooth-surface" onclick="paintTooth('${num}','V')" title="Vestibular"></polygon>
-        <polygon points="100,0 100,100 75,75 75,25" fill="${fill('D')}" class="tooth-surface" onclick="paintTooth('${num}','D')" title="Distal"></polygon>
-        <polygon points="0,100 100,100 75,75 25,75" fill="${fill('L')}" class="tooth-surface" onclick="paintTooth('${num}','L')" title="Lingual/Palatina"></polygon>
-        <polygon points="0,0 25,25 25,75 0,100" fill="${fill('M')}" class="tooth-surface" onclick="paintTooth('${num}','M')" title="Mesial"></polygon>
-        <rect x="25" y="25" width="50" height="50" fill="${fill('O')}" class="tooth-surface" onclick="paintTooth('${num}','O')" title="Oclusal/Incisal"></rect>
-        ${isAusente ? '<line x1="10" y1="10" x2="90" y2="90" stroke="#ef4444" stroke-width="8"/><line x1="90" y1="10" x2="10" y2="90" stroke="#ef4444" stroke-width="8"/>' : ''}
-      </svg>
+    <div id="tooth-${num}" class="tooth-card bg-slate-900/90 border border-slate-800 rounded-xl p-1.5 flex flex-col items-center gap-1 w-[58px]">
+      <span class="text-[11px] font-mono font-bold text-cyan-300">${num}</span>
+      ${isLower ? diagram5Faces + silhouette : silhouette + diagram5Faces}
     </div>`;
 }
 
@@ -329,6 +433,69 @@ function paintTooth(num, face, forcedCondition) {
   renderOdontogram();
   const card = document.getElementById('tooth-' + num);
   if (card) card.classList.add('selected');
+}
+
+function getStructuredFindings() {
+  const items = [];
+  let estimatedTotalMxn = 0;
+
+  Object.keys(STATE.odontogramData).sort().forEach(num => {
+    const t = STATE.odontogramData[num];
+    if (!t) return;
+    if (t.whole === 'ausente') {
+      items.push(`P${num}: Ausente`);
+      return;
+    }
+    const faces = ['V','L','M','D','O'];
+    const allSame = faces.every(f => t[f] === t.O && t.O !== 'sano');
+    if (allSame) {
+      const label = t.O.charAt(0).toUpperCase() + t.O.slice(1);
+      items.push(`P${num}: ${label}`);
+      estimatedTotalMxn += BASE_PRICES_MXN[t.O] || 0;
+    } else {
+      const byCond = {};
+      faces.forEach(f => {
+        if (t[f] && t[f] !== 'sano') {
+          if (!byCond[t[f]]) byCond[t[f]] = [];
+          byCond[t[f]].push(FACE_LABELS[f]);
+        }
+      });
+      Object.keys(byCond).forEach(cond => {
+        const label = cond.charAt(0).toUpperCase() + cond.slice(1);
+        items.push(`P${num}: ${label} (${byCond[cond].join(', ')})`);
+        estimatedTotalMxn += BASE_PRICES_MXN[cond] || 0;
+      });
+    }
+  });
+
+  return { text: items.join(' · '), count: items.length, estimatedTotalMxn };
+}
+
+function updateFindingsSummary() {
+  const el = document.getElementById('findingsSummaryText');
+  if (!el) return;
+  const f = getStructuredFindings();
+  el.textContent = f.count > 0 ? f.text : 'Sin hallazgos registrados en el odontograma actual.';
+}
+
+function copyFindingsToNote() {
+  const f = getStructuredFindings();
+  if (!f.count) return showToast('Marca al menos una pieza en el odontograma.', 'error');
+  document.getElementById('notaProc').value = 'Exploración clínica / Odontograma';
+  document.getElementById('notaObs').value = `Hallazgos: ${f.text}`;
+  showToast('Hallazgos copiados a la Nota de Evolución.');
+}
+
+function quoteFindingsToFinance() {
+  const f = getStructuredFindings();
+  if (!f.count) return showToast('Marca al menos un tratamiento en el odontograma.', 'error');
+  const pacId = document.getElementById('clinicalPatientSelect').value;
+  if (pacId) document.getElementById('finPaciente').value = pacId;
+  document.getElementById('finConcepto').value = f.text;
+  document.getElementById('finMoneda').value = 'MXN';
+  document.getElementById('finTotal').value = f.estimatedTotalMxn > 0 ? f.estimatedTotalMxn : '';
+  document.getElementById('finAbonado').value = 0;
+  openModal('modalFinanzas');
 }
 
 // MOTOR DE VOZ (WEB SPEECH API es-MX)
@@ -407,7 +574,7 @@ async function saveCurrentOdontogram() {
     Paciente_ID: pacId,
     Tipo_Denticion: document.getElementById('denticionSelect').value,
     JSON_Estado: STATE.odontogramData,
-    Notas_Generales: 'Guardado desde módulo clínico'
+    Notas_Generales: getStructuredFindings().text || 'Guardado desde módulo clínico'
   });
   showToast('Versión del odontograma guardada.');
   await hydrateApp();
