@@ -1,6 +1,6 @@
 /**
- * DentaOS Pro - Frontend Controller Completo (app.js)
- * Odontograma Anatómico + Confirmación de Voz + Agenda Calendario + Tarifario + Cobro con Folio + SuperAdmin
+ * DentaOS Pro - Frontend Controller v3 (app.js)
+ * Superpoderes Titular (Equipo/PINs + Tarifario ilimitado) + Fix Citas Web + Odontograma Anatómico + SuperAdmin
  * Desarrollado por Xicosoft
  */
 
@@ -10,8 +10,10 @@ const STATE = {
   session: null,
   consultorio: {},
   doctores: [],
+  equipoAdmin: [],
   tarifario: [],
   pacientes: [],
+  historias: [],
   citas: [],
   odontogramas: [],
   notas: [],
@@ -25,15 +27,9 @@ const STATE = {
 };
 
 const CONDITION_COLORS = {
-  sano: '#1e293b',
-  caries: '#ef4444',
-  resina: '#3b82f6',
-  corona: '#eab308',
-  endodoncia: '#a855f7',
-  implante: '#10b981',
-  ausente: '#020617'
+  sano: '#1e293b', caries: '#ef4444', resina: '#3b82f6',
+  corona: '#eab308', endodoncia: '#a855f7', implante: '#10b981', ausente: '#020617'
 };
-
 const FACE_LABELS = { V: 'Vestibular', L: 'Lingual', M: 'Mesial', D: 'Distal', O: 'Oclusal' };
 const BASE_PRICES_MXN = { caries: 850, resina: 900, corona: 4500, endodoncia: 3200, implante: 14000, ausente: 1200 };
 const ADULT_ROWS = [
@@ -68,9 +64,8 @@ async function runServer(action, ...args) {
 }
 
 function showLoader(visible, text) {
-  const el = document.getElementById('globalLoader');
   document.getElementById('loaderText').textContent = text || 'Sincronizando...';
-  el.classList.toggle('hidden', !visible);
+  document.getElementById('globalLoader').classList.toggle('hidden', !visible);
 }
 
 function showToast(msg, type = 'success') {
@@ -98,14 +93,17 @@ function switchTab(tabName) {
   lucide.createIcons();
 }
 
-function copyBookingLink() {
+function copyPublicLink(pageName) {
   const cid = STATE.consultorio.Consultorio_ID || 'CLINIC-001';
   const base = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
-  const url = `${base}booking.html?clinic=${encodeURIComponent(cid)}`;
-  navigator.clipboard.writeText(url).then(() => showToast('Liga pública de citas copiada al portapapeles.'));
+  const url = `${base}${pageName}?clinic=${encodeURIComponent(cid)}`;
+  navigator.clipboard.writeText(url).then(() => {
+    const label = pageName === 'historia.html' ? 'Link de Historia Clínica' : 'Link de Auto-Agendado';
+    showToast(`${label} copiado para ${cid}.`);
+  });
 }
 
-// AUTH (CON RUTEO OCULTO A SUPERADMIN)
+// AUTH
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const pin = document.getElementById('loginPin').value;
@@ -120,6 +118,9 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   } else {
     document.getElementById('appShell').classList.remove('hidden');
     document.getElementById('userBadge').textContent = `${STATE.session.Nombre} · ${STATE.session.Rol}`;
+    const isTitular = STATE.session.Rol === 'TITULAR';
+    document.getElementById('btnOpenEquipo').classList.toggle('hidden', !isTitular);
+    document.getElementById('btnOpenTarifario').classList.toggle('hidden', !isTitular);
     await hydrateApp();
   }
 });
@@ -162,25 +163,53 @@ function populateSelects() {
     if (el) el.innerHTML = docOptions;
   });
 
+  const tarQuick = document.getElementById('finTarifarioQuick');
+  if (tarQuick) {
+    tarQuick.innerHTML = '<option value="">⚡ Cargar tratamiento rápido desde Tarifario...</option>' +
+      (STATE.tarifario || []).map((t, i) => `<option value="${i}">${t.Concepto} — $${Number(t.Precio_MXN).toLocaleString('es-MX')} MXN</option>`).join('');
+  }
+
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('citaFecha').value = today;
   const agendaDate = document.getElementById('agendaDateFilter');
   if (agendaDate && !agendaDate.value) agendaDate.value = today;
 }
 
+function applyTarifarioToFinance() {
+  const idx = document.getElementById('finTarifarioQuick').value;
+  if (idx === '') return;
+  const item = STATE.tarifario[Number(idx)];
+  if (!item) return;
+  document.getElementById('finConcepto').value = item.Concepto;
+  document.getElementById('finMoneda').value = 'MXN';
+  document.getElementById('finTotal').value = item.Precio_MXN;
+}
+
 // DASHBOARD
 function renderDashboard() {
   const ingresosMxn = STATE.finanzas.reduce((s, f) => s + Number(f.Abonado_MXN || 0), 0);
   const porCobrarMxn = STATE.finanzas.reduce((s, f) => s + (Number(f.Total_MXN || 0) - Number(f.Abonado_MXN || 0)), 0);
-  const citasActivas = STATE.citas.filter(c => c.Estatus === 'AGENDADA' || c.Estatus === 'CONFIRMADA' || c.Estatus === 'AGENDADA_WEB').length;
+  const citasActivas = STATE.citas.filter(c => c.Estatus === 'AGENDADA' || c.Estatus === 'CONFIRMADA' || c.Estatus === 'AGENDADA_WEB');
   const labPendientes = STATE.laboratorio.filter(l => l.Estatus !== 'ENTREGADO').length;
 
   document.getElementById('kpiGrid').innerHTML = `
     <div class="glass-card p-5 rounded-2xl"><p class="text-xs text-slate-400">Cobrado Total (MXN)</p><p class="text-2xl font-bold text-emerald-400 mt-1">$${ingresosMxn.toLocaleString('es-MX')}</p></div>
     <div class="glass-card p-5 rounded-2xl"><p class="text-xs text-slate-400">Saldo por Cobrar (MXN)</p><p class="text-2xl font-bold text-amber-400 mt-1">$${porCobrarMxn.toLocaleString('es-MX')}</p></div>
-    <div class="glass-card p-5 rounded-2xl"><p class="text-xs text-slate-400">Citas Próximas</p><p class="text-2xl font-bold text-cyan-400 mt-1">${citasActivas}</p></div>
+    <div class="glass-card p-5 rounded-2xl"><p class="text-xs text-slate-400">Citas Próximas</p><p class="text-2xl font-bold text-cyan-400 mt-1">${citasActivas.length}</p></div>
     <div class="glass-card p-5 rounded-2xl"><p class="text-xs text-slate-400">Órdenes Lab Activas</p><p class="text-2xl font-bold text-purple-400 mt-1">${labPendientes}</p></div>
   `;
+
+  // Mostrar últimas 6 citas (incluyendo AGENDADA_WEB) directo en el Dashboard
+  document.getElementById('dashboardRecentCitas').innerHTML = citasActivas.slice(-6).reverse().map(c => `
+    <div class="bg-slate-900/80 border ${c.Estatus === 'AGENDADA_WEB' ? 'border-emerald-500/40' : 'border-slate-800'} rounded-xl p-3 flex flex-col justify-between gap-1.5">
+      <div class="flex justify-between items-center">
+        <span class="text-[11px] font-mono text-cyan-400">${c.Fecha} · ${String(c.Hora_Inicio).slice(0,5)}</span>
+        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${c.Estatus === 'AGENDADA_WEB' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-300'}">${c.Estatus}</span>
+      </div>
+      <p class="text-sm font-bold text-white truncate">${c.Paciente_Nombre}</p>
+      <p class="text-[11px] text-slate-400 truncate">${c.Motivo} · ${c.Doctor_Nombre}</p>
+    </div>
+  `).join('') || '<p class="text-xs text-slate-500 col-span-full">No hay citas próximas registradas.</p>';
 
   document.getElementById('cofeprisList').innerHTML = STATE.pacientes.map(p => {
     const c = p.Cofepris || { porcentaje: 0, nivel: 'ROJO', faltantes: [] };
@@ -188,7 +217,7 @@ function renderDashboard() {
     return `
       <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3 flex items-center justify-between gap-3">
         <div>
-          <p class="text-sm font-semibold text-white">${p.Nombre}</p>
+          <p class="text-sm font-semibold text-white">${p.Nombre} ${p.Tiene_Historia_NOM013 ? '<span class="text-[10px] bg-cyan-500/20 text-cyan-300 px-1.5 py-0.5 rounded ml-1">NOM-013 ✓</span>' : ''}</p>
           <p class="text-xs text-slate-400">${c.faltantes.length ? 'Falta: ' + c.faltantes.join(', ') : 'Expediente 100% listo ante COFEPRIS'}</p>
         </div>
         <span class="px-2.5 py-1 rounded-full text-xs font-bold ${badge}">${c.porcentaje}%</span>
@@ -212,7 +241,126 @@ function renderDashboard() {
   }).join('') || '<p class="text-xs text-slate-500">Todos los pacientes están al día en sus revisiones.</p>';
 }
 
-// AGENDA EN COLUMNAS POR HORA / DOCTOR + VISTA LISTA
+// SUPERPODER TITULAR: EQUIPO Y PINS
+function openEquipoModal() {
+  if (STATE.session.Rol !== 'TITULAR') return showToast('Solo el Titular puede ver el equipo y PINs.', 'error');
+  renderEquipoList();
+  openModal('modalEquipo');
+}
+
+function renderEquipoList() {
+  const listEl = document.getElementById('equipoList');
+  listEl.innerHTML = (STATE.equipoAdmin || []).map((u, idx) => {
+    const activo = String(u.Activo).toUpperCase() === 'SI';
+    const nextAct = activo ? 'NO' : 'SI';
+    return `
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p class="text-sm font-bold text-white">${u.Nombre} <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-cyan-300 ml-1">${u.Rol}</span></p>
+          <p class="text-xs text-slate-400">Cédula: ${u.Cedula || 'N/A'} · Comisión: ${u.Comision_Pct || 0}%</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="pinMask_${idx}" data-pin="${u.PIN_Acceso}" data-shown="0" class="font-mono text-xs bg-slate-950 border border-slate-700 px-2.5 py-1 rounded-lg text-amber-300">PIN: ••••</span>
+          <button type="button" onclick="togglePinReveal(${idx})" class="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-lg text-xs text-slate-200">Ver PIN</button>
+          <button type="button" onclick="toggleUserActive('${u.Usuario_ID}','${u.PIN_Acceso}','${nextAct}')" class="${activo ? 'bg-red-500/15 text-red-300' : 'bg-emerald-500/15 text-emerald-300'} px-2.5 py-1 rounded-lg text-xs font-semibold">
+            ${activo ? 'Desactivar' : 'Activar'}
+          </button>
+        </div>
+      </div>`;
+  }).join('') || '<p class="text-xs text-slate-500">Sin usuarios registrados.</p>';
+}
+
+function togglePinReveal(idx) {
+  const el = document.getElementById('pinMask_' + idx);
+  const shown = el.dataset.shown === '1';
+  el.textContent = shown ? 'PIN: ••••' : `PIN: ${el.dataset.pin}`;
+  el.dataset.shown = shown ? '0' : '1';
+}
+
+async function toggleUserActive(uid, pin, newAct) {
+  await runServer('apiToggleTeamUser', STATE.session, uid, pin, newAct);
+  showToast('Estatus de usuario actualizado.');
+  await hydrateApp();
+  renderEquipoList();
+}
+
+document.getElementById('formAddUser').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const res = await runServer('apiSaveTeamUser', STATE.session, {
+    Nombre: document.getElementById('usrNombre').value,
+    Rol: document.getElementById('usrRol').value,
+    Cedula: document.getElementById('usrCedula').value,
+    Comision_Pct: document.getElementById('usrComision').value,
+    PIN_Acceso: document.getElementById('usrPin').value
+  });
+  e.target.reset();
+  showToast(res.message);
+  await hydrateApp();
+  renderEquipoList();
+});
+
+// SUPERPODER TITULAR: TARIFARIO DINÁMICO (AGREGAR / EDITAR / ELIMINAR)
+let TEMP_TARIFARIO = [];
+const PROTECTED_KEYS = ['caries','resina','corona','endodoncia','implante','ausente'];
+
+function openTarifarioModal() {
+  if (STATE.session.Rol !== 'TITULAR') return showToast('Solo el Titular puede editar el tarifario.', 'error');
+  TEMP_TARIFARIO = (STATE.tarifario || []).map(t => Object.assign({}, t));
+  renderTarifarioInputs();
+  openModal('modalTarifario');
+}
+
+function renderTarifarioInputs() {
+  const listEl = document.getElementById('tarifarioInputsList');
+  listEl.innerHTML = TEMP_TARIFARIO.map((t, idx) => {
+    const isProtected = PROTECTED_KEYS.includes(String(t.Clave).toLowerCase());
+    return `
+      <div class="grid grid-cols-12 gap-2 items-center bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl">
+        <div class="col-span-7">
+          <span class="text-[10px] uppercase font-mono text-cyan-400">${t.Clave || 'nuevo'}</span>
+          <input data-idx="${idx}" data-field="Concepto" value="${t.Concepto}" required placeholder="Nombre del tratamiento" class="tar-input w-full bg-transparent text-xs text-white focus:outline-none border-b border-slate-700 pb-0.5">
+        </div>
+        <div class="col-span-4">
+          <label class="text-[10px] text-slate-400 block">Precio (MXN)</label>
+          <input data-idx="${idx}" data-field="Precio_MXN" type="number" step="0.01" min="0" value="${t.Precio_MXN}" required class="tar-input w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-sm font-mono text-emerald-400">
+        </div>
+        <div class="col-span-1 flex justify-end">
+          ${isProtected ? '<span class="text-[10px] text-slate-600" title="Base Odontograma">🔒</span>' : `<button type="button" onclick="removeTarifarioRow(${idx})" class="text-red-400 hover:text-red-300 text-xs font-bold p-1">✕</button>`}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function syncTempTarifarioFromDom() {
+  document.querySelectorAll('.tar-input').forEach(inp => {
+    const i = Number(inp.dataset.idx);
+    const f = inp.dataset.field;
+    if (TEMP_TARIFARIO[i]) TEMP_TARIFARIO[i][f] = f === 'Precio_MXN' ? Number(inp.value) || 0 : inp.value;
+  });
+}
+
+function addTarifarioRow() {
+  syncTempTarifarioFromDom();
+  TEMP_TARIFARIO.push({ Clave: 'trat_' + (TEMP_TARIFARIO.length + 1), Concepto: '', Precio_MXN: 500 });
+  renderTarifarioInputs();
+}
+
+function removeTarifarioRow(idx) {
+  syncTempTarifarioFromDom();
+  TEMP_TARIFARIO.splice(idx, 1);
+  renderTarifarioInputs();
+}
+
+document.getElementById('formTarifario').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  syncTempTarifarioFromDom();
+  await runServer('apiSaveTarifario', STATE.session, TEMP_TARIFARIO);
+  closeModal('modalTarifario');
+  showToast('Tarifario guardado.');
+  await hydrateApp();
+});
+
+// AGENDA
 function setAgendaView(mode) {
   STATE.agendaView = mode;
   document.getElementById('btnAgendaGrid').className = mode === 'grid' ? 'px-3 py-1 rounded-lg bg-cyan-500 text-slate-950' : 'px-3 py-1 rounded-lg text-slate-400';
@@ -223,25 +371,29 @@ function setAgendaView(mode) {
 }
 
 function quickScheduleSlot(doctorId, hora) {
-  const fecha = document.getElementById('agendaDateFilter').value;
   document.getElementById('citaDoctor').value = doctorId;
-  document.getElementById('citaFecha').value = fecha;
+  document.getElementById('citaFecha').value = document.getElementById('agendaDateFilter').value;
   document.getElementById('citaHora').value = hora;
   openModal('modalCita');
 }
 
+function normalizeHora(val) {
+  const s = String(val || '');
+  const m = s.match(/(\d{2}:\d{2})/);
+  return m ? m[1] : s.slice(0, 5);
+}
+
 function renderAgenda() {
   const selectedDate = document.getElementById('agendaDateFilter').value || new Date().toISOString().split('T')[0];
-
   const docs = STATE.doctores.filter(d => d.Rol !== 'RECEPCION');
-  const hours = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
-  const dayCitas = STATE.citas.filter(c => String(c.Fecha) === selectedDate);
+  const hours = ['09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00'];
+  const dayCitas = STATE.citas.filter(c => String(c.Fecha).slice(0, 10) === selectedDate);
 
   const headerCells = docs.map(d => `<th class="p-3 text-left border-l border-slate-800 min-w-[200px]"><p class="text-xs font-bold text-white">${d.Nombre}</p><p class="text-[10px] text-cyan-400">${d.Rol}</p></th>`).join('');
   const bodyRows = hours.map(hr => {
     const hrPrefix = hr.slice(0, 2);
     const cols = docs.map(d => {
-      const slotCitas = dayCitas.filter(c => c.Doctor_ID === d.Usuario_ID && String(c.Hora_Inicio).slice(0, 2) === hrPrefix);
+      const slotCitas = dayCitas.filter(c => c.Doctor_ID === d.Usuario_ID && normalizeHora(c.Hora_Inicio).slice(0, 2) === hrPrefix);
       if (!slotCitas.length) {
         return `<td onclick="quickScheduleSlot('${d.Usuario_ID}','${hr}')" class="p-2 border-l border-t border-slate-800/70 hover:bg-cyan-500/10 cursor-pointer text-[10px] text-slate-600 text-center transition">+ Agendar</td>`;
       }
@@ -249,7 +401,7 @@ function renderAgenda() {
         ${slotCitas.map(c => `
           <div class="bg-cyan-500/15 border border-cyan-500/40 rounded-lg p-2 text-xs">
             <div class="flex justify-between items-center">
-              <span class="font-mono text-[10px] text-cyan-300">${c.Hora_Inicio} · ${c.Unidad}</span>
+              <span class="font-mono text-[10px] text-cyan-300">${normalizeHora(c.Hora_Inicio)} · ${c.Unidad}</span>
               <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-900 text-emerald-300">${c.Estatus}</span>
             </div>
             <p class="font-bold text-white truncate mt-0.5">${c.Paciente_Nombre}</p>
@@ -263,25 +415,23 @@ function renderAgenda() {
 
   document.getElementById('agendaGridView').innerHTML = `
     <table class="w-full border-collapse">
-      <thead class="bg-slate-900/90">
-        <tr><th class="p-3 text-xs text-slate-400 text-left">Hora</th>${headerCells}</tr>
-      </thead>
+      <thead class="bg-slate-900/90"><tr><th class="p-3 text-xs text-slate-400 text-left">Hora</th>${headerCells}</tr></thead>
       <tbody>${bodyRows}</tbody>
-    </table>
-  `;
+    </table>`;
 
   document.getElementById('agendaList').innerHTML = STATE.citas.slice().reverse().map(c => {
     const pac = STATE.pacientes.find(p => p.Paciente_ID === c.Paciente_ID) || { Telefono: '', Idioma: 'ES' };
+    const horaFmt = normalizeHora(c.Hora_Inicio);
     const msg = pac.Idioma === 'EN'
-      ? `Hi ${c.Paciente_Nombre}, reminder of your dental appointment at ${STATE.consultorio.Nombre} on ${c.Fecha} at ${c.Hora_Inicio} with ${c.Doctor_Nombre}. Please reply YES to confirm.`
-      : `Hola ${c.Paciente_Nombre}, te recordamos tu cita dental en ${STATE.consultorio.Nombre} el ${c.Fecha} a las ${c.Hora_Inicio} con ${c.Doctor_Nombre}. Responde SÍ para confirmar.`;
+      ? `Hi ${c.Paciente_Nombre}, reminder of your dental appointment at ${STATE.consultorio.Nombre} on ${c.Fecha} at ${horaFmt} with ${c.Doctor_Nombre}. Reply YES to confirm.`
+      : `Hola ${c.Paciente_Nombre}, te recordamos tu cita dental en ${STATE.consultorio.Nombre} el ${c.Fecha} a las ${horaFmt} con ${c.Doctor_Nombre}. Responde SÍ para confirmar.`;
     const waUrl = `https://wa.me/${String(pac.Telefono).replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`;
 
     return `
       <div class="glass-card rounded-2xl p-4 space-y-3">
         <div class="flex justify-between items-start">
           <div>
-            <span class="text-xs font-mono text-cyan-400">${c.Fecha} · ${c.Hora_Inicio} (${c.Unidad})</span>
+            <span class="text-xs font-mono text-cyan-400">${c.Fecha} · ${horaFmt} (${c.Unidad})</span>
             <h4 class="font-bold text-white mt-0.5">${c.Paciente_Nombre}</h4>
             <p class="text-xs text-slate-400">${c.Motivo} · ${c.Doctor_Nombre}</p>
           </div>
@@ -303,7 +453,7 @@ async function changeCitaStatus(citaId, status) {
   await hydrateApp();
 }
 
-// ODONTOGRAMA ANATÓMICO SVG + MODAL DE CONFIRMACIÓN DE VOZ + TARIFARIO
+// ODONTOGRAMA ANATÓMICO + VOZ
 function onSelectClinicalPatient() {
   const pacId = document.getElementById('clinicalPatientSelect').value;
   const pac = STATE.pacientes.find(p => p.Paciente_ID === pacId);
@@ -362,10 +512,7 @@ function buildAnatomicalSilhouetteSvg(num, toothState, isLower) {
   const opacity = isAusente ? '0.25' : '1';
   const flipTransform = isLower ? 'transform="translate(0, 64) scale(1, -1)"' : '';
 
-  let rootPath = '';
-  let crownPath = '';
-  let endoPath = '';
-
+  let rootPath = '', crownPath = '', endoPath = '';
   if (cat === 'incisor') {
     rootPath = `<path d="M22,34 Q25,8 30,6 Q35,8 38,34 Z" fill="#0f172a" stroke="${rootStroke}" stroke-width="1.6"/>`;
     crownPath = `<path d="M18,34 Q18,58 30,58 Q42,58 42,34 Z" fill="${crownFill}" stroke="${crownStroke}" stroke-width="1.8"/>`;
@@ -385,50 +532,36 @@ function buildAnatomicalSilhouetteSvg(num, toothState, isLower) {
   }
 
   if (hasImplante) {
-    rootPath = `
-      <rect x="24" y="8" width="12" height="26" rx="3" fill="#064e3b" stroke="#10b981" stroke-width="1.8"/>
+    rootPath = `<rect x="24" y="8" width="12" height="26" rx="3" fill="#064e3b" stroke="#10b981" stroke-width="1.8"/>
       <line x1="23" y1="14" x2="37" y2="14" stroke="#34d399" stroke-width="1.6"/>
       <line x1="23" y1="20" x2="37" y2="20" stroke="#34d399" stroke-width="1.6"/>
-      <line x1="23" y1="26" x2="37" y2="26" stroke="#34d399" stroke-width="1.6"/>
-    `;
+      <line x1="23" y1="26" x2="37" y2="26" stroke="#34d399" stroke-width="1.6"/>`;
   }
 
   return `
-    <svg viewBox="0 0 60 64" class="w-11 h-12 select-none" onclick="paintTooth('${num}','O')" title="Pieza ${num} (${cat})">
-      <g ${flipTransform} opacity="${opacity}">
-        ${rootPath}
-        ${crownPath}
-        ${hasEndo && !hasImplante ? endoPath : ''}
-      </g>
+    <svg viewBox="0 0 60 64" class="w-11 h-12 select-none" onclick="paintTooth('${num}','O')" title="Pieza ${num}">
+      <g ${flipTransform} opacity="${opacity}">${rootPath}${crownPath}${hasEndo && !hasImplante ? endoPath : ''}</g>
       ${isAusente ? '<line x1="12" y1="12" x2="48" y2="52" stroke="#ef4444" stroke-width="4.5" stroke-linecap="round"/><line x1="48" y1="12" x2="12" y2="52" stroke="#ef4444" stroke-width="4.5" stroke-linecap="round"/>' : ''}
-    </svg>
-  `;
+    </svg>`;
 }
 
 function renderOdontogram() {
   const tipo = document.getElementById('denticionSelect').value;
   const rows = tipo === 'INFANTIL' ? CHILD_ROWS : ADULT_ROWS;
   const midIdx = tipo === 'INFANTIL' ? 5 : 8;
-  const container = document.getElementById('odontogramGrid');
-
-  container.innerHTML = rows.map((row, rIdx) => {
+  document.getElementById('odontogramGrid').innerHTML = rows.map((row, rIdx) => {
     const isLower = rIdx === 1;
-    const leftQuad = row.slice(0, midIdx);
-    const rightQuad = row.slice(midIdx);
     const label = isLower ? 'Arcada Inferior (Q4 Derecha | Q3 Izquierda)' : 'Arcada Superior (Q1 Derecha | Q2 Izquierda)';
-
     return `
       <div>
         <p class="text-[11px] uppercase tracking-wider text-slate-500 mb-2 font-semibold">${label}</p>
         <div class="flex items-stretch gap-1.5 min-w-max">
-          ${leftQuad.map(num => buildToothSvgCard(num, isLower)).join('')}
+          ${row.slice(0, midIdx).map(num => buildToothSvgCard(num, isLower)).join('')}
           <div class="quadrant-divider"></div>
-          ${rightQuad.map(num => buildToothSvgCard(num, isLower)).join('')}
+          ${row.slice(midIdx).map(num => buildToothSvgCard(num, isLower)).join('')}
         </div>
-      </div>
-    `;
+      </div>`;
   }).join('');
-
   updateFindingsSummary();
 }
 
@@ -436,19 +569,16 @@ function buildToothSvgCard(num, isLower) {
   const t = STATE.odontogramData[num] || { V: 'sano', L: 'sano', M: 'sano', D: 'sano', O: 'sano', whole: '' };
   const isAusente = t.whole === 'ausente';
   const fill = (face) => isAusente ? CONDITION_COLORS.ausente : (CONDITION_COLORS[t[face]] || CONDITION_COLORS.sano);
-
   const silhouette = buildAnatomicalSilhouetteSvg(num, t, isLower);
   const diagram5Faces = `
     <svg viewBox="0 0 100 100" class="w-10 h-10">
-      <polygon points="0,0 100,0 75,25 25,25" fill="${fill('V')}" class="tooth-surface" onclick="paintTooth('${num}','V')" title="Vestibular"></polygon>
-      <polygon points="100,0 100,100 75,75 75,25" fill="${fill('D')}" class="tooth-surface" onclick="paintTooth('${num}','D')" title="Distal"></polygon>
-      <polygon points="0,100 100,100 75,75 25,75" fill="${fill('L')}" class="tooth-surface" onclick="paintTooth('${num}','L')" title="Lingual/Palatina"></polygon>
-      <polygon points="0,0 25,25 25,75 0,100" fill="${fill('M')}" class="tooth-surface" onclick="paintTooth('${num}','M')" title="Mesial"></polygon>
-      <rect x="25" y="25" width="50" height="50" fill="${fill('O')}" class="tooth-surface" onclick="paintTooth('${num}','O')" title="Oclusal/Incisal"></rect>
+      <polygon points="0,0 100,0 75,25 25,25" fill="${fill('V')}" class="tooth-surface" onclick="paintTooth('${num}','V')"></polygon>
+      <polygon points="100,0 100,100 75,75 75,25" fill="${fill('D')}" class="tooth-surface" onclick="paintTooth('${num}','D')"></polygon>
+      <polygon points="0,100 100,100 75,75 25,75" fill="${fill('L')}" class="tooth-surface" onclick="paintTooth('${num}','L')"></polygon>
+      <polygon points="0,0 25,25 25,75 0,100" fill="${fill('M')}" class="tooth-surface" onclick="paintTooth('${num}','M')"></polygon>
+      <rect x="25" y="25" width="50" height="50" fill="${fill('O')}" class="tooth-surface" onclick="paintTooth('${num}','O')"></rect>
       ${isAusente ? '<line x1="12" y1="12" x2="88" y2="88" stroke="#ef4444" stroke-width="8"/><line x1="88" y1="12" x2="12" y2="88" stroke="#ef4444" stroke-width="8"/>' : ''}
-    </svg>
-  `;
-
+    </svg>`;
   return `
     <div id="tooth-${num}" class="tooth-card bg-slate-900/90 border border-slate-800 rounded-xl p-1.5 flex flex-col items-center gap-1 w-[58px]">
       <span class="text-[11px] font-mono font-bold text-cyan-300">${num}</span>
@@ -458,13 +588,10 @@ function buildToothSvgCard(num, isLower) {
 
 function paintTooth(num, face, forcedCondition) {
   const cond = forcedCondition || document.getElementById('conditionBrush').value;
-  if (!STATE.odontogramData[num]) {
-    STATE.odontogramData[num] = { V: 'sano', L: 'sano', M: 'sano', D: 'sano', O: 'sano', whole: '' };
-  }
+  if (!STATE.odontogramData[num]) STATE.odontogramData[num] = { V: 'sano', L: 'sano', M: 'sano', D: 'sano', O: 'sano', whole: '' };
   if (cond === 'ausente' || cond === 'corona' || cond === 'implante') {
-    if (cond === 'ausente') {
-      STATE.odontogramData[num].whole = 'ausente';
-    } else {
+    if (cond === 'ausente') STATE.odontogramData[num].whole = 'ausente';
+    else {
       STATE.odontogramData[num].whole = '';
       ['V','L','M','D','O'].forEach(f => STATE.odontogramData[num][f] = cond);
     }
@@ -487,7 +614,6 @@ function getPriceByKey(clave) {
 function getStructuredFindings() {
   const items = [];
   let estimatedTotalMxn = 0;
-
   Object.keys(STATE.odontogramData).sort().forEach(num => {
     const t = STATE.odontogramData[num];
     if (!t) return;
@@ -499,8 +625,7 @@ function getStructuredFindings() {
     const faces = ['V','L','M','D','O'];
     const allSame = faces.every(f => t[f] === t.O && t.O !== 'sano');
     if (allSame) {
-      const label = t.O.charAt(0).toUpperCase() + t.O.slice(1);
-      items.push(`P${num}: ${label}`);
+      items.push(`P${num}: ${t.O.charAt(0).toUpperCase() + t.O.slice(1)}`);
       estimatedTotalMxn += getPriceByKey(t.O);
     } else {
       const byCond = {};
@@ -511,13 +636,11 @@ function getStructuredFindings() {
         }
       });
       Object.keys(byCond).forEach(cond => {
-        const label = cond.charAt(0).toUpperCase() + cond.slice(1);
-        items.push(`P${num}: ${label} (${byCond[cond].join(', ')})`);
+        items.push(`P${num}: ${cond.charAt(0).toUpperCase() + cond.slice(1)} (${byCond[cond].join(', ')})`);
         estimatedTotalMxn += getPriceByKey(cond);
       });
     }
   });
-
   return { text: items.join(' · '), count: items.length, estimatedTotalMxn };
 }
 
@@ -548,38 +671,30 @@ function quoteFindingsToFinance() {
   openModal('modalFinanzas');
 }
 
-// MOTOR DE VOZ CON MODAL DE CONFIRMACIÓN
 function toggleVoiceExploration() {
   const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRec) return showToast('Tu navegador no soporta dictado por voz. Usa Chrome o Edge.', 'error');
-  if (STATE.isListening && STATE.recognition) {
-    STATE.recognition.stop();
-    return;
-  }
+  if (!SpeechRec) return showToast('Usa Chrome o Edge para dictado por voz.', 'error');
+  if (STATE.isListening && STATE.recognition) { STATE.recognition.stop(); return; }
 
   const rec = new SpeechRec();
   rec.lang = 'es-MX';
   rec.continuous = true;
   rec.interimResults = false;
-
   rec.onstart = () => {
     STATE.isListening = true;
     document.getElementById('btnVoiceToggle').classList.add('bg-red-500', 'mic-listening');
     document.getElementById('voiceTranscriptBar').classList.remove('hidden');
     document.getElementById('voiceTranscriptText').textContent = 'Escuchando comandos dentales...';
   };
-
   rec.onresult = (event) => {
     const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase().trim();
     document.getElementById('voiceTranscriptText').textContent = `Dictado: "${transcript}"`;
     parseDentalVoiceCommand(transcript);
   };
-
   rec.onend = () => {
     STATE.isListening = false;
     document.getElementById('btnVoiceToggle').classList.remove('bg-red-500', 'mic-listening');
   };
-
   STATE.recognition = rec;
   rec.start();
 }
@@ -587,8 +702,6 @@ function toggleVoiceExploration() {
 function parseDentalVoiceCommand(text) {
   const numMatch = text.match(/\b([1-8][1-8])\b/);
   if (!numMatch) return;
-  const pieza = numMatch[1];
-
   let face = 'O';
   if (text.includes('mesial')) face = 'M';
   else if (text.includes('distal')) face = 'D';
@@ -604,7 +717,7 @@ function parseDentalVoiceCommand(text) {
   else if (text.includes('sano') || text.includes('limpiar')) cond = 'sano';
 
   document.getElementById('vcRawText').textContent = `Escuché: "${text}"`;
-  document.getElementById('vcPieza').value = pieza;
+  document.getElementById('vcPieza').value = numMatch[1];
   document.getElementById('vcCara').value = face;
   document.getElementById('vcCondicion').value = cond;
   openModal('modalVoiceConfirm');
@@ -615,14 +728,12 @@ function confirmVoiceFinding() {
   const face = document.getElementById('vcCara').value;
   const cond = document.getElementById('vcCondicion').value;
   if (!pieza) return;
-
   paintTooth(pieza, face, cond);
   closeModal('modalVoiceConfirm');
-  const confirmMsg = `Pieza ${pieza}, ${cond} confirmado.`;
-  showToast(confirmMsg);
-
+  const msg = `Pieza ${pieza}, ${cond} confirmado.`;
+  showToast(msg);
   if ('speechSynthesis' in window) {
-    const utter = new SpeechSynthesisUtterance(confirmMsg);
+    const utter = new SpeechSynthesisUtterance(msg);
     utter.lang = 'es-MX';
     window.speechSynthesis.speak(utter);
   }
@@ -663,15 +774,14 @@ async function saveNotaEvolucion() {
   const proc = document.getElementById('notaProc').value;
   if (!pacId || !proc) return showToast('Completa paciente y procedimiento', 'error');
   await runServer('apiSaveNotaEvolucion', STATE.session, {
-    Paciente_ID: pacId,
-    Procedimiento: proc,
+    Paciente_ID: pacId, Procedimiento: proc,
     Signos_Vitales: document.getElementById('notaSignos').value,
     Observaciones: document.getElementById('notaObs').value,
     Marcar_Consentimiento: document.getElementById('notaConsentCheck').checked
   });
   document.getElementById('notaProc').value = '';
   document.getElementById('notaObs').value = '';
-  showToast('Nota de evolución guardada.');
+  showToast('Nota guardada.');
   await hydrateApp();
 }
 
@@ -679,11 +789,9 @@ function uploadCompressedPhoto() {
   const fileInput = document.getElementById('fotoInput');
   const pacId = document.getElementById('clinicalPatientSelect').value;
   if (!fileInput.files.length || !pacId) return showToast('Selecciona paciente e imagen', 'error');
-
   const pac = STATE.pacientes.find(p => p.Paciente_ID === pacId);
   const file = fileInput.files[0];
   const reader = new FileReader();
-
   reader.onload = (e) => {
     const img = new Image();
     img.onload = async () => {
@@ -693,17 +801,14 @@ function uploadCompressedPhoto() {
       canvas.width = img.width * scale;
       canvas.height = img.height * scale;
       canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-      const compressedBase64 = canvas.toDataURL('image/jpeg', 0.72);
-
       await runServer('apiUploadEvidencia', STATE.session, {
-        Paciente_ID: pacId,
-        Paciente_Nombre: pac.Nombre,
+        Paciente_ID: pacId, Paciente_Nombre: pac.Nombre,
         Categoria: document.getElementById('fotoCategoria').value,
         File_Name: `${Date.now()}_${file.name.replace(/\.[^/.]+$/, '')}.jpg`,
-        Base64_Data: compressedBase64
+        Base64_Data: canvas.toDataURL('image/jpeg', 0.72)
       });
       fileInput.value = '';
-      showToast('Imagen comprimida y guardada en Drive.');
+      showToast('Imagen guardada en Drive.');
       await hydrateApp();
     };
     img.src = e.target.result;
@@ -715,47 +820,32 @@ async function generatePdf(docType, extraData = {}) {
   const pacId = extraData.Paciente_ID || document.getElementById('clinicalPatientSelect').value;
   if (!pacId) return showToast('Selecciona un paciente', 'error');
   if (docType === 'RECETA') {
-    extraData.indicaciones = document.getElementById('notaObs').value || prompt('Indicaciones médicas para la receta:');
+    extraData.indicaciones = document.getElementById('notaObs').value || prompt('Indicaciones médicas:');
     if (!extraData.indicaciones) return;
   }
-  const res = await runServer('apiGenerateDocumentPdf', STATE.session, {
-    Paciente_ID: pacId,
-    Doc_Type: docType,
-    Data: extraData
-  });
-  showToast('PDF generado. Abriendo documento...');
+  const res = await runServer('apiGenerateDocumentPdf', STATE.session, { Paciente_ID: pacId, Doc_Type: docType, Data: extraData });
+  showToast('PDF generado.');
   window.open(res.data.url, '_blank');
 }
 
 function renderFinanzas() {
   document.getElementById('finanzasTableBody').innerHTML = STATE.finanzas.slice().reverse().map(f => `
     <tr class="hover:bg-slate-900/50">
-      <td class="p-3.5 text-xs">
-        <span class="font-mono font-bold text-cyan-400 block">${f.Folio_Recibo || '#0000'}</span>
-        <span class="text-slate-400">${f.Fecha}</span>
-      </td>
+      <td class="p-3.5 text-xs"><span class="font-mono font-bold text-cyan-400 block">${f.Folio_Recibo || '#0000'}</span><span class="text-slate-400">${f.Fecha}</span></td>
       <td class="p-3.5 font-medium text-white">${f.Paciente_Nombre}</td>
       <td class="p-3.5 text-slate-300 text-xs max-w-xs">${f.Concepto}</td>
-      <td class="p-3.5 text-xs">
-        <span class="px-2 py-0.5 rounded font-bold ${f.Moneda === 'USD' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-300'}">${f.Moneda}</span>
-        <span class="text-slate-400 block mt-0.5">${f.Metodo_Pago || 'Efectivo'}</span>
-      </td>
+      <td class="p-3.5 text-xs"><span class="px-2 py-0.5 rounded font-bold ${f.Moneda === 'USD' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-300'}">${f.Moneda}</span><span class="text-slate-400 block mt-0.5">${f.Metodo_Pago || 'Efectivo'}</span></td>
       <td class="p-3.5 text-right font-mono">$${Number(f.Total_Original).toFixed(2)}</td>
       <td class="p-3.5 text-right font-mono text-emerald-400">$${Number(f.Abonado_Original).toFixed(2)}</td>
       <td class="p-3.5 text-right font-mono text-cyan-400">$${Number(f.Honorario_Doctor_MXN).toFixed(2)}</td>
-      <td class="p-3.5">
-        <button onclick='generatePdf("PRESUPUESTO", {Paciente_ID:"${f.Paciente_ID}", concepto:"${f.Concepto}", moneda:"${f.Moneda}", tipoCambio:"${f.Tipo_Cambio_Aplicado}", total:${f.Total_Original}, abonado:${f.Abonado_Original}})' class="text-xs bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-lg text-cyan-300 font-semibold">PDF</button>
-      </td>
+      <td class="p-3.5"><button onclick='generatePdf("PRESUPUESTO", {Paciente_ID:"${f.Paciente_ID}", concepto:"${f.Concepto}", moneda:"${f.Moneda}", tipoCambio:"${f.Tipo_Cambio_Aplicado}", total:${f.Total_Original}, abonado:${f.Abonado_Original}})' class="text-xs bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-lg text-cyan-300 font-semibold">PDF</button></td>
     </tr>`).join('') || '<tr><td colspan="8" class="p-5 text-center text-slate-500">Sin movimientos financieros.</td></tr>';
 }
 
 function renderLaboratorio() {
   document.getElementById('labList').innerHTML = STATE.laboratorio.slice().reverse().map(l => `
     <div class="glass-card rounded-2xl p-4 space-y-2.5">
-      <div class="flex justify-between">
-        <span class="text-xs font-bold text-purple-300">${l.Laboratorio}</span>
-        <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-cyan-300">${l.Estatus}</span>
-      </div>
+      <div class="flex justify-between"><span class="text-xs font-bold text-purple-300">${l.Laboratorio}</span><span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-cyan-300">${l.Estatus}</span></div>
       <h4 class="font-bold text-white">${l.Trabajo}</h4>
       <p class="text-xs text-slate-400">Paciente: ${l.Paciente_Nombre} · Color/Pieza: ${l.Color_Pieza}</p>
       <p class="text-xs text-slate-500">Entrega est: ${l.Fecha_Entrega_Est || 'Pendiente'} · Costo: $${l.Costo_MXN} MXN</p>
@@ -781,55 +871,15 @@ function fillConfigForm() {
   document.getElementById('cfgWebhook').value = STATE.consultorio.Webhook_URL || '';
 }
 
-function openTarifarioModal() {
-  if (STATE.session.Rol !== 'TITULAR') {
-    return showToast('Solo el Titular puede editar el tarifario de precios.', 'error');
-  }
-  const listEl = document.getElementById('tarifarioInputsList');
-  listEl.innerHTML = (STATE.tarifario || []).map((t, idx) => `
-    <div class="grid grid-cols-12 gap-2 items-center bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl">
-      <input type="hidden" id="tarKey_${idx}" value="${t.Clave}">
-      <div class="col-span-7">
-        <span class="text-[10px] uppercase font-mono text-cyan-400">${t.Clave}</span>
-        <input id="tarConcepto_${idx}" value="${t.Concepto}" required class="w-full bg-transparent text-xs text-white focus:outline-none border-b border-slate-700 pb-0.5">
-      </div>
-      <div class="col-span-5">
-        <label class="text-[10px] text-slate-400 block">Precio (MXN)</label>
-        <input id="tarPrecio_${idx}" type="number" step="0.01" min="0" value="${t.Precio_MXN}" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm font-mono text-emerald-400">
-      </div>
-    </div>
-  `).join('');
-  openModal('modalTarifario');
-}
-
-document.getElementById('formTarifario').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const updated = (STATE.tarifario || []).map((t, idx) => ({
-    Clave: document.getElementById(`tarKey_${idx}`).value,
-    Concepto: document.getElementById(`tarConcepto_${idx}`).value,
-    Precio_MXN: Number(document.getElementById(`tarPrecio_${idx}`).value) || 0
-  }));
-  await runServer('apiSaveTarifario', STATE.session, updated);
-  closeModal('modalTarifario');
-  showToast('Tarifario actualizado.');
-  await hydrateApp();
-});
-
 document.getElementById('formPaciente').addEventListener('submit', async (e) => {
   e.preventDefault();
   await runServer('apiSavePaciente', STATE.session, {
-    Nombre: document.getElementById('pacNombre').value,
-    Telefono: document.getElementById('pacTel').value,
-    Idioma: document.getElementById('pacIdioma').value,
-    Email: document.getElementById('pacEmail').value,
-    Fecha_Nacimiento: document.getElementById('pacNac').value,
-    Alergias: document.getElementById('pacAlergias').value,
+    Nombre: document.getElementById('pacNombre').value, Telefono: document.getElementById('pacTel').value,
+    Idioma: document.getElementById('pacIdioma').value, Email: document.getElementById('pacEmail').value,
+    Fecha_Nacimiento: document.getElementById('pacNac').value, Alergias: document.getElementById('pacAlergias').value,
     Antecedentes: document.getElementById('pacAntecedentes').value
   });
-  e.target.reset();
-  closeModal('modalPaciente');
-  showToast('Paciente registrado.');
-  await hydrateApp();
+  e.target.reset(); closeModal('modalPaciente'); showToast('Paciente registrado.'); await hydrateApp();
 });
 
 document.getElementById('formCita').addEventListener('submit', async (e) => {
@@ -837,21 +887,13 @@ document.getElementById('formCita').addEventListener('submit', async (e) => {
   const pacSel = document.getElementById('citaPaciente');
   const docSel = document.getElementById('citaDoctor');
   await runServer('apiSaveCita', STATE.session, {
-    Paciente_ID: pacSel.value,
-    Paciente_Nombre: pacSel.options[pacSel.selectedIndex].text.split(' (')[0],
-    Doctor_ID: docSel.value,
-    Doctor_Nombre: docSel.options[docSel.selectedIndex].text,
-    Unidad: document.getElementById('citaUnidad').value,
-    Fecha: document.getElementById('citaFecha').value,
-    Hora_Inicio: document.getElementById('citaHora').value,
-    Duracion_Min: document.getElementById('citaDuracion').value,
-    Motivo: document.getElementById('citaMotivo').value,
-    Sync_Calendar: document.getElementById('citaSyncCal').checked
+    Paciente_ID: pacSel.value, Paciente_Nombre: pacSel.options[pacSel.selectedIndex].text.split(' (')[0],
+    Doctor_ID: docSel.value, Doctor_Nombre: docSel.options[docSel.selectedIndex].text,
+    Unidad: document.getElementById('citaUnidad').value, Fecha: document.getElementById('citaFecha').value,
+    Hora_Inicio: document.getElementById('citaHora').value, Duracion_Min: document.getElementById('citaDuracion').value,
+    Motivo: document.getElementById('citaMotivo').value, Sync_Calendar: document.getElementById('citaSyncCal').checked
   });
-  e.target.reset();
-  closeModal('modalCita');
-  showToast('Cita agendada.');
-  await hydrateApp();
+  e.target.reset(); closeModal('modalCita'); showToast('Cita agendada.'); await hydrateApp();
 });
 
 document.getElementById('formFinanzas').addEventListener('submit', async (e) => {
@@ -859,78 +901,57 @@ document.getElementById('formFinanzas').addEventListener('submit', async (e) => 
   const pacSel = document.getElementById('finPaciente');
   const docSel = document.getElementById('finDoctor');
   const res = await runServer('apiSavePresupuestoPago', STATE.session, {
-    Paciente_ID: pacSel.value,
-    Paciente_Nombre: pacSel.options[pacSel.selectedIndex].text.split(' (')[0],
-    Doctor_ID: docSel.value,
-    Concepto: document.getElementById('finConcepto').value,
-    Moneda: document.getElementById('finMoneda').value,
-    Metodo_Pago: document.getElementById('finMetodoPago').value,
-    Total_Original: document.getElementById('finTotal').value,
-    Abonado_Original: document.getElementById('finAbonado').value
+    Paciente_ID: pacSel.value, Paciente_Nombre: pacSel.options[pacSel.selectedIndex].text.split(' (')[0],
+    Doctor_ID: docSel.value, Concepto: document.getElementById('finConcepto').value,
+    Moneda: document.getElementById('finMoneda').value, Metodo_Pago: document.getElementById('finMetodoPago').value,
+    Total_Original: document.getElementById('finTotal').value, Abonado_Original: document.getElementById('finAbonado').value
   });
-  e.target.reset();
-  closeModal('modalFinanzas');
-  showToast(res.message || 'Cobro registrado.');
-  await hydrateApp();
+  e.target.reset(); closeModal('modalFinanzas'); showToast(res.message); await hydrateApp();
 });
 
 document.getElementById('formLab').addEventListener('submit', async (e) => {
   e.preventDefault();
   const pacSel = document.getElementById('labPaciente');
   await runServer('apiSaveOrdenLab', STATE.session, {
-    Paciente_ID: pacSel.value,
-    Paciente_Nombre: pacSel.options[pacSel.selectedIndex].text.split(' (')[0],
-    Laboratorio: document.getElementById('labNombre').value,
-    Trabajo: document.getElementById('labTrabajo').value,
-    Color_Pieza: document.getElementById('labColor').value,
-    Fecha_Entrega_Est: document.getElementById('labEntrega').value,
+    Paciente_ID: pacSel.value, Paciente_Nombre: pacSel.options[pacSel.selectedIndex].text.split(' (')[0],
+    Laboratorio: document.getElementById('labNombre').value, Trabajo: document.getElementById('labTrabajo').value,
+    Color_Pieza: document.getElementById('labColor').value, Fecha_Entrega_Est: document.getElementById('labEntrega').value,
     Costo_MXN: document.getElementById('labCosto').value
   });
-  e.target.reset();
-  closeModal('modalLab');
-  showToast('Orden de laboratorio creada.');
-  await hydrateApp();
+  e.target.reset(); closeModal('modalLab'); showToast('Orden creada.'); await hydrateApp();
 });
 
 document.getElementById('configForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   await runServer('apiUpdateConsultorioConfig', STATE.session, {
-    Nombre: document.getElementById('cfgNombre').value,
-    Direccion: document.getElementById('cfgDireccion').value,
-    Telefono: document.getElementById('cfgTelefono').value,
-    Tipo_Cambio_USD: document.getElementById('cfgTC').value,
+    Nombre: document.getElementById('cfgNombre').value, Direccion: document.getElementById('cfgDireccion').value,
+    Telefono: document.getElementById('cfgTelefono').value, Tipo_Cambio_USD: document.getElementById('cfgTC').value,
     Webhook_URL: document.getElementById('cfgWebhook').value
   });
-  showToast('Configuración guardada.');
-  await hydrateApp();
+  showToast('Configuración guardada.'); await hydrateApp();
 });
 
-// CONSOLA SUPERADMIN XICOSOFT
+// SUPERADMIN
 async function loadSuperAdminPanel() {
   const res = await runServer('apiSuperAdminListClinics', STATE.session);
   const clinics = res.data.clinics || [];
   const base = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
-
   document.getElementById('saClinicsList').innerHTML = clinics.slice().reverse().map(c => {
     const isActive = String(c.Estatus).toUpperCase() === 'ACTIVO';
-    const nextStatus = isActive ? 'SUSPENDIDO' : 'ACTIVO';
     const bookingUrl = `${base}booking.html?clinic=${encodeURIComponent(c.Consultorio_ID)}`;
+    const histUrl = `${base}historia.html?clinic=${encodeURIComponent(c.Consultorio_ID)}`;
     return `
       <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-2.5">
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <span class="text-xs font-mono font-bold text-cyan-400">${c.Consultorio_ID}</span>
-            <h3 class="font-bold text-white">${c.Nombre}</h3>
-          </div>
+          <div><span class="text-xs font-mono font-bold text-cyan-400">${c.Consultorio_ID}</span><h3 class="font-bold text-white">${c.Nombre}</h3></div>
           <span class="text-[11px] font-bold px-2.5 py-1 rounded-full ${isActive ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'}">${c.Estatus}</span>
         </div>
         <p class="text-xs text-slate-400">PIN Titular: <span class="font-mono text-amber-300 font-bold">${c.PIN_Titular}</span> · Alta: ${c.Fecha_Alta}</p>
         <div class="flex flex-wrap gap-2 pt-2 border-t border-slate-800">
-          <a href="${c.Spreadsheet_URL}" target="_blank" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold">Abrir Sheet</a>
-          <button onclick="navigator.clipboard.writeText('${bookingUrl}').then(()=>showToast('Liga de citas copiada'))" class="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 px-3 py-1.5 rounded-lg text-xs font-semibold">Copiar Liga Citas</button>
-          <button onclick="toggleClinicStatus('${c.Consultorio_ID}','${nextStatus}')" class="${isActive ? 'bg-red-500/15 text-red-300' : 'bg-emerald-500/15 text-emerald-300'} px-3 py-1.5 rounded-lg text-xs font-semibold">
-            ${isActive ? 'Suspender' : 'Reactivar'}
-          </button>
+          <a href="${c.Spreadsheet_URL}" target="_blank" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold">Sheet</a>
+          <button onclick="navigator.clipboard.writeText('${bookingUrl}').then(()=>showToast('Link citas copiado'))" class="bg-cyan-500/20 text-cyan-300 px-3 py-1.5 rounded-lg text-xs font-semibold">Link Citas</button>
+          <button onclick="navigator.clipboard.writeText('${histUrl}').then(()=>showToast('Link historia copiado'))" class="bg-purple-500/20 text-purple-300 px-3 py-1.5 rounded-lg text-xs font-semibold">Link Historia</button>
+          <button onclick="toggleClinicStatus('${c.Consultorio_ID}','${isActive ? 'SUSPENDIDO' : 'ACTIVO'}')" class="${isActive ? 'bg-red-500/15 text-red-300' : 'bg-emerald-500/15 text-emerald-300'} px-3 py-1.5 rounded-lg text-xs font-semibold">${isActive ? 'Suspender' : 'Reactivar'}</button>
         </div>
       </div>`;
   }).join('') || '<p class="text-xs text-slate-500">Sin clínicas registradas.</p>';
@@ -946,16 +967,11 @@ async function toggleClinicStatus(cid, newStatus) {
 document.getElementById('formCreateClinic').addEventListener('submit', async (e) => {
   e.preventDefault();
   const res = await runServer('apiSuperAdminCreateClinic', STATE.session, {
-    Nombre: document.getElementById('saClinicNombre').value,
-    Direccion: document.getElementById('saClinicDir').value,
-    Telefono: document.getElementById('saClinicTel').value,
-    Titular_Nombre: document.getElementById('saDocNombre').value,
-    Cedula: document.getElementById('saDocCedula').value,
-    Titular_PIN: document.getElementById('saDocPin').value
+    Nombre: document.getElementById('saClinicNombre').value, Direccion: document.getElementById('saClinicDir').value,
+    Telefono: document.getElementById('saClinicTel').value, Titular_Nombre: document.getElementById('saDocNombre').value,
+    Cedula: document.getElementById('saDocCedula').value, Titular_PIN: document.getElementById('saDocPin').value
   });
-  e.target.reset();
-  showToast(res.message);
-  await loadSuperAdminPanel();
+  e.target.reset(); showToast(res.message); await loadSuperAdminPanel();
 });
 
 lucide.createIcons();
