@@ -1,6 +1,5 @@
 /**
- * DentaOS Pro - Frontend Controller v3 (app.js)
- * Superpoderes Titular (Equipo/PINs + Tarifario ilimitado) + Fix Citas Web + Odontograma Anatómico + SuperAdmin
+ * DentaOS Pro - Frontend Controller v4 Full Enterprise (app.js)
  * Desarrollado por Xicosoft
  */
 
@@ -12,6 +11,7 @@ const STATE = {
   doctores: [],
   equipoAdmin: [],
   tarifario: [],
+  inventario: [],
   pacientes: [],
   historias: [],
   citas: [],
@@ -75,7 +75,7 @@ function showToast(msg, type = 'success') {
   div.className = `${color} border text-slate-950 font-semibold text-xs px-4 py-3 rounded-xl shadow-xl transition`;
   div.textContent = msg;
   container.appendChild(div);
-  setTimeout(() => div.remove(), 3800);
+  setTimeout(() => div.remove(), 4000);
 }
 
 function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
@@ -144,6 +144,7 @@ async function hydrateApp() {
   renderDashboard();
   renderAgenda();
   renderFinanzas();
+  renderInventario();
   renderLaboratorio();
   fillConfigForm();
   onSelectClinicalPatient();
@@ -190,20 +191,19 @@ function renderDashboard() {
   const ingresosMxn = STATE.finanzas.reduce((s, f) => s + Number(f.Abonado_MXN || 0), 0);
   const porCobrarMxn = STATE.finanzas.reduce((s, f) => s + (Number(f.Total_MXN || 0) - Number(f.Abonado_MXN || 0)), 0);
   const citasActivas = STATE.citas.filter(c => c.Estatus === 'AGENDADA' || c.Estatus === 'CONFIRMADA' || c.Estatus === 'AGENDADA_WEB');
-  const labPendientes = STATE.laboratorio.filter(l => l.Estatus !== 'ENTREGADO').length;
+  const alertasInv = (STATE.inventario || []).filter(i => Number(i.Stock_Actual) <= Number(i.Stock_Minimo)).length;
 
   document.getElementById('kpiGrid').innerHTML = `
     <div class="glass-card p-5 rounded-2xl"><p class="text-xs text-slate-400">Cobrado Total (MXN)</p><p class="text-2xl font-bold text-emerald-400 mt-1">$${ingresosMxn.toLocaleString('es-MX')}</p></div>
     <div class="glass-card p-5 rounded-2xl"><p class="text-xs text-slate-400">Saldo por Cobrar (MXN)</p><p class="text-2xl font-bold text-amber-400 mt-1">$${porCobrarMxn.toLocaleString('es-MX')}</p></div>
     <div class="glass-card p-5 rounded-2xl"><p class="text-xs text-slate-400">Citas Próximas</p><p class="text-2xl font-bold text-cyan-400 mt-1">${citasActivas.length}</p></div>
-    <div class="glass-card p-5 rounded-2xl"><p class="text-xs text-slate-400">Órdenes Lab Activas</p><p class="text-2xl font-bold text-purple-400 mt-1">${labPendientes}</p></div>
+    <div class="glass-card p-5 rounded-2xl"><p class="text-xs text-slate-400">Alertas Stock Bajo</p><p class="text-2xl font-bold ${alertasInv > 0 ? 'text-red-400' : 'text-emerald-400'} mt-1">${alertasInv}</p></div>
   `;
 
-  // Mostrar últimas 6 citas (incluyendo AGENDADA_WEB) directo en el Dashboard
   document.getElementById('dashboardRecentCitas').innerHTML = citasActivas.slice(-6).reverse().map(c => `
     <div class="bg-slate-900/80 border ${c.Estatus === 'AGENDADA_WEB' ? 'border-emerald-500/40' : 'border-slate-800'} rounded-xl p-3 flex flex-col justify-between gap-1.5">
       <div class="flex justify-between items-center">
-        <span class="text-[11px] font-mono text-cyan-400">${c.Fecha} · ${String(c.Hora_Inicio).slice(0,5)}</span>
+        <span class="text-[11px] font-mono text-cyan-400">${c.Fecha} · ${normalizeHora(c.Hora_Inicio)}</span>
         <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${c.Estatus === 'AGENDADA_WEB' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-300'}">${c.Estatus}</span>
       </div>
       <p class="text-sm font-bold text-white truncate">${c.Paciente_Nombre}</p>
@@ -239,6 +239,199 @@ function renderDashboard() {
         <a href="${waUrl}" target="_blank" class="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 px-3 py-1.5 rounded-lg text-xs font-bold">WhatsApp</a>
       </div>`;
   }).join('') || '<p class="text-xs text-slate-500">Todos los pacientes están al día en sus revisiones.</p>';
+}
+
+// ============================================================================
+// MEJORA 1: IMPORTADOR MASIVO CSV / EXCEL
+// ============================================================================
+
+function downloadCsvTemplate() {
+  const csv = 'Nombre,Telefono,Email,Fecha_Nacimiento,Idioma,Alergias\nJuan Perez,6561112233,juan@ejemplo.com,1990-05-12,ES,Ninguna\nEmily Clark,9155550144,emily@example.com,1987-11-03,EN,Penicilina';
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'plantilla_pacientes_dentaos.csv';
+  a.click();
+}
+
+function processCsvImport() {
+  const fileInput = document.getElementById('csvFileInput');
+  if (!fileInput.files.length) return showToast('Selecciona un archivo .csv primero.', 'error');
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const lines = e.target.result.split(/\r?\n/).filter(l => l.trim() !== '');
+    if (lines.length < 2) return showToast('El archivo CSV no contiene registros.', 'error');
+
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const rows = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+      const obj = {
+        Nombre: cols[headers.indexOf('nombre')] || cols[0] || '',
+        Telefono: cols[headers.indexOf('telefono')] || cols[1] || '',
+        Email: cols[headers.indexOf('email')] || cols[2] || '',
+        Fecha_Nacimiento: cols[headers.indexOf('fecha_nacimiento')] || cols[3] || '',
+        Idioma: cols[headers.indexOf('idioma')] || cols[4] || 'ES',
+        Alergias: cols[headers.indexOf('alergias')] || cols[5] || 'Ninguna'
+      };
+      if (obj.Nombre && obj.Telefono) rows.push(obj);
+    }
+
+    if (!rows.length) return showToast('No se detectaron filas válidas.', 'error');
+    const res = await runServer('apiImportPacientesBatch', STATE.session, rows);
+    fileInput.value = '';
+    closeModal('modalImportCsv');
+    showToast(res.message);
+    await hydrateApp();
+  };
+  reader.readAsText(fileInput.files[0]);
+}
+
+// ============================================================================
+// MEJORA 2: INVENTARIO DENTAL (STOCK MÍNIMO + CADUCIDADES COFEPRIS)
+// ============================================================================
+
+function renderInventario() {
+  const nowMs = new Date().getTime();
+  const in30DaysMs = nowMs + 30 * 24 * 60 * 60 * 1000;
+
+  document.getElementById('inventarioList').innerHTML = (STATE.inventario || []).map(item => {
+    const stock = Number(item.Stock_Actual) || 0;
+    const min = Number(item.Stock_Minimo) || 0;
+    const lowStock = stock <= min;
+
+    let cadBadge = '';
+    if (item.Fecha_Caducidad) {
+      const cadMs = new Date(item.Fecha_Caducidad).getTime();
+      if (cadMs < nowMs) cadBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/20 text-red-300">CADUCADO</span>';
+      else if (cadMs <= in30DaysMs) cadBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300">POR CADUCAR</span>';
+    }
+
+    return `
+      <div class="glass-card rounded-2xl p-4 space-y-2.5 ${lowStock ? 'border-red-500/50' : ''}">
+        <div class="flex justify-between items-start gap-2">
+          <div>
+            <span class="text-[10px] uppercase font-bold text-cyan-400">${item.Categoria}</span>
+            <h4 class="font-bold text-white text-sm">${item.Nombre}</h4>
+          </div>
+          <div class="flex flex-col items-end gap-1">
+            ${lowStock ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/20 text-red-300">STOCK BAJO</span>' : ''}
+            ${cadBadge}
+          </div>
+        </div>
+        <p class="text-xs text-slate-400">Lote: ${item.Lote || 'N/A'} · Caduca: ${item.Fecha_Caducidad || 'N/A'}</p>
+        <div class="flex items-center justify-between pt-2 border-t border-slate-800">
+          <span class="text-sm font-mono font-bold ${lowStock ? 'text-red-400' : 'text-emerald-400'}">${stock} ${item.Unidad} <span class="text-[10px] text-slate-500">(mín ${min})</span></span>
+          <div class="flex gap-1.5">
+            <button onclick="adjustStock('${item.Insumo_ID}', -1)" class="bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded-lg text-xs font-bold">-1</button>
+            <button onclick="adjustStock('${item.Insumo_ID}', 1)" class="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 px-3 py-1 rounded-lg text-xs font-bold">+1</button>
+          </div>
+        </div>
+      </div>`;
+  }).join('') || '<p class="text-sm text-slate-500 col-span-full">Aún no hay insumos en el inventario. Agrega anestésicos, resinas o guantes.</p>';
+}
+
+async function adjustStock(insumoId, delta) {
+  await runServer('apiUpdateInsumoStock', STATE.session, insumoId, delta);
+  await hydrateApp();
+}
+
+document.getElementById('formInsumo').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  await runServer('apiSaveInsumo', STATE.session, {
+    Nombre: document.getElementById('insNombre').value,
+    Categoria: document.getElementById('insCat').value,
+    Unidad: document.getElementById('insUnidad').value,
+    Stock_Actual: document.getElementById('insStock').value,
+    Stock_Minimo: document.getElementById('insMin').value,
+    Lote: document.getElementById('insLote').value,
+    Fecha_Caducidad: document.getElementById('insCad').value
+  });
+  e.target.reset();
+  closeModal('modalInsumo');
+  showToast('Insumo guardado.');
+  await hydrateApp();
+});
+
+// ============================================================================
+// MEJORA 3: CORTE DE CAJA Y COMISIONES POR DOCTOR
+// ============================================================================
+
+function openCorteCajaModal() {
+  setCorteRange('today');
+  openModal('modalCorteCaja');
+}
+
+function setCorteRange(type) {
+  const today = new Date();
+  const hasta = today.toISOString().split('T')[0];
+  let desde = hasta;
+  if (type === 'week') {
+    const past = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
+    desde = past.toISOString().split('T')[0];
+  }
+  document.getElementById('corteDesde').value = desde;
+  document.getElementById('corteHasta').value = hasta;
+  renderCorteCaja();
+}
+
+function renderCorteCaja() {
+  const desde = document.getElementById('corteDesde').value;
+  const hasta = document.getElementById('corteHasta').value;
+  const movs = (STATE.finanzas || []).filter(f => {
+    const d = String(f.Fecha).slice(0, 10);
+    return (!desde || d >= desde) && (!hasta || d <= hasta);
+  });
+
+  let efectivo = 0, tarjeta = 0, transferencia = 0, totalMxn = 0;
+  const byDoc = {};
+
+  movs.forEach(m => {
+    const abono = Number(m.Abonado_MXN || 0);
+    const hon = Number(m.Honorario_Doctor_MXN || 0);
+    const met = String(m.Metodo_Pago || 'Efectivo').toLowerCase();
+    totalMxn += abono;
+    if (met.includes('tarjeta')) tarjeta += abono;
+    else if (met.includes('transf')) transferencia += abono;
+    else efectivo += abono;
+
+    const docName = m.Doctor_Nombre || 'Sin asignar';
+    if (!byDoc[docName]) byDoc[docName] = { cobrado: 0, honorario: 0, count: 0 };
+    byDoc[docName].cobrado += abono;
+    byDoc[docName].honorario += hon;
+    byDoc[docName].count++;
+  });
+
+  document.getElementById('corteSummaryGrid').innerHTML = `
+    <div class="bg-slate-900 border border-slate-800 p-3 rounded-xl"><p class="text-[10px] text-slate-400">💵 Efectivo</p><p class="text-lg font-bold text-white">$${efectivo.toLocaleString('es-MX')}</p></div>
+    <div class="bg-slate-900 border border-slate-800 p-3 rounded-xl"><p class="text-[10px] text-slate-400">💳 Tarjeta</p><p class="text-lg font-bold text-white">$${tarjeta.toLocaleString('es-MX')}</p></div>
+    <div class="bg-slate-900 border border-slate-800 p-3 rounded-xl"><p class="text-[10px] text-slate-400">🏦 Transferencia</p><p class="text-lg font-bold text-white">$${transferencia.toLocaleString('es-MX')}</p></div>
+    <div class="bg-emerald-500/15 border border-emerald-500/40 p-3 rounded-xl"><p class="text-[10px] text-emerald-300">Total Ingresos MXN</p><p class="text-lg font-bold text-emerald-400">$${totalMxn.toLocaleString('es-MX')}</p></div>
+  `;
+
+  document.getElementById('corteComisionesList').innerHTML = Object.keys(byDoc).map(doc => `
+    <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex items-center justify-between text-xs">
+      <div>
+        <p class="font-bold text-white">${doc}</p>
+        <p class="text-slate-400">${byDoc[doc].count} cobros · Generado: $${byDoc[doc].cobrado.toLocaleString('es-MX')} MXN</p>
+      </div>
+      <div class="text-right">
+        <span class="text-[10px] text-slate-400 block">A pagar comisión</span>
+        <span class="text-sm font-mono font-bold text-cyan-400">$${byDoc[doc].honorario.toLocaleString('es-MX')} MXN</span>
+      </div>
+    </div>
+  `).join('') || '<p class="text-xs text-slate-500">Sin cobros registrados en este rango de fechas.</p>';
+}
+
+// ============================================================================
+// MEJORA 4: PRUEBA DE RECORDATORIOS WHATSAPP AUTOMÁTICOS
+// ============================================================================
+
+async function testWhatsappReminders() {
+  const res = await runServer('apiTestWhatsappReminders', STATE.session);
+  showToast(res.message);
 }
 
 // SUPERPODER TITULAR: EQUIPO Y PINS
@@ -299,7 +492,7 @@ document.getElementById('formAddUser').addEventListener('submit', async (e) => {
   renderEquipoList();
 });
 
-// SUPERPODER TITULAR: TARIFARIO DINÁMICO (AGREGAR / EDITAR / ELIMINAR)
+// TARIFARIO DINÁMICO
 let TEMP_TARIFARIO = [];
 const PROTECTED_KEYS = ['caries','resina','corona','endodoncia','implante','ausente'];
 
@@ -311,8 +504,7 @@ function openTarifarioModal() {
 }
 
 function renderTarifarioInputs() {
-  const listEl = document.getElementById('tarifarioInputsList');
-  listEl.innerHTML = TEMP_TARIFARIO.map((t, idx) => {
+  document.getElementById('tarifarioInputsList').innerHTML = TEMP_TARIFARIO.map((t, idx) => {
     const isProtected = PROTECTED_KEYS.includes(String(t.Clave).toLowerCase());
     return `
       <div class="grid grid-cols-12 gap-2 items-center bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl">
@@ -325,7 +517,7 @@ function renderTarifarioInputs() {
           <input data-idx="${idx}" data-field="Precio_MXN" type="number" step="0.01" min="0" value="${t.Precio_MXN}" required class="tar-input w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-sm font-mono text-emerald-400">
         </div>
         <div class="col-span-1 flex justify-end">
-          ${isProtected ? '<span class="text-[10px] text-slate-600" title="Base Odontograma">🔒</span>' : `<button type="button" onclick="removeTarifarioRow(${idx})" class="text-red-400 hover:text-red-300 text-xs font-bold p-1">✕</button>`}
+          ${isProtected ? '<span class="text-[10px] text-slate-600">🔒</span>' : `<button type="button" onclick="removeTarifarioRow(${idx})" class="text-red-400 hover:text-red-300 text-xs font-bold p-1">✕</button>`}
         </div>
       </div>`;
   }).join('');
@@ -869,6 +1061,7 @@ function fillConfigForm() {
   document.getElementById('cfgTelefono').value = STATE.consultorio.Telefono || '';
   document.getElementById('cfgTC').value = STATE.consultorio.Tipo_Cambio_USD || 19.5;
   document.getElementById('cfgWebhook').value = STATE.consultorio.Webhook_URL || '';
+  document.getElementById('cfgWaWebhook').value = STATE.consultorio.WA_Webhook_URL || '';
 }
 
 document.getElementById('formPaciente').addEventListener('submit', async (e) => {
@@ -926,7 +1119,8 @@ document.getElementById('configForm').addEventListener('submit', async (e) => {
   await runServer('apiUpdateConsultorioConfig', STATE.session, {
     Nombre: document.getElementById('cfgNombre').value, Direccion: document.getElementById('cfgDireccion').value,
     Telefono: document.getElementById('cfgTelefono').value, Tipo_Cambio_USD: document.getElementById('cfgTC').value,
-    Webhook_URL: document.getElementById('cfgWebhook').value
+    Webhook_URL: document.getElementById('cfgWebhook').value,
+    WA_Webhook_URL: document.getElementById('cfgWaWebhook').value
   });
   showToast('Configuración guardada.'); await hydrateApp();
 });
