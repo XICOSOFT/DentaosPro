@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Historia Clínica Dental | NOM-013</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950/30 text-slate-100 p-4 md:p-8 flex flex-col items-center">
+
+  <div class="w-full max-w-2xl space-y-5">
+    <!-- HEADER -->
+    <div class="glass-card rounded-3xl p-6 flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <span class="text-[10px] uppercase tracking-[0.2em] font-bold text-cyan-400">Expediente NOM-004 / NOM-013</span>
+        <h1 id="clinicTitle" class="text-xl font-bold text-white mt-0.5">Historia Clínica Odontológica</h1>
+        <p id="clinicSub" class="text-xs text-slate-400">Confidencial · Llena tus datos antes de pasar a consulta</p>
+      </div>
+      <div class="flex bg-slate-900 border border-slate-700 rounded-xl p-1 text-xs font-bold">
+        <button id="btnES" onclick="setLang('ES')" class="px-3 py-1.5 rounded-lg bg-cyan-500 text-slate-950">🇲🇽 ES</button>
+        <button id="btnEN" onclick="setLang('EN')" class="px-3 py-1.5 rounded-lg text-slate-400">🇺🇸 EN</button>
+      </div>
+    </div>
+
+    <!-- FORMULARIO -->
+    <form id="historiaForm" class="glass-card rounded-3xl p-6 md:p-8 space-y-6">
+      <div id="errBox" class="hidden bg-red-500/15 border border-red-500/40 text-red-300 text-xs font-semibold px-4 py-3 rounded-xl"></div>
+
+      <!-- 1. IDENTIFICACIÓN -->
+      <div class="space-y-3">
+        <h2 data-i18n="s1" class="text-xs font-bold uppercase tracking-wider text-cyan-400">1. Ficha de Identificación</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <input id="hNombre" required placeholder="Nombre completo / Full name" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-3 text-sm">
+          <input id="hTel" required type="tel" placeholder="WhatsApp (10 dígitos / digits)" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-3 text-sm">
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <input id="hNac" type="date" required class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-3 text-sm">
+          <select id="hSexo" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-3 text-sm">
+            <option value="Femenino">Femenino / Female</option>
+            <option value="Masculino">Masculino / Male</option>
+            <option value="Otro">Otro / Other</option>
+          </select>
+          <input id="hEmail" type="email" placeholder="Email (opcional)" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-3 text-sm">
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <input id="hDomicilio" placeholder="Domicilio / Address" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-3 text-sm">
+          <input id="hEmergencia" placeholder="Contacto de emergencia (Nombre y Tel)" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-3 text-sm">
+        </div>
+      </div>
+
+      <!-- 2. MOTIVO DE CONSULTA -->
+      <div class="space-y-2 pt-3 border-t border-slate-800">
+        <h2 data-i18n="s2" class="text-xs font-bold uppercase tracking-wider text-cyan-400">2. Motivo de Consulta (en tus palabras)</h2>
+        <textarea id="hMotivo" rows="2" required placeholder="Ej. Dolor en muela derecha al tomar frío, limpieza general, valoración de implante..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-3 text-sm"></textarea>
+      </div>
+
+      <!-- 3. ANTECEDENTES MÉDICOS Y ALERGIAS -->
+      <div class="space-y-3 pt-3 border-t border-slate-800">
+        <h2 data-i18n="s3" class="text-xs font-bold uppercase tracking-wider text-cyan-400">3. Antecedentes Médicos y Alergias</h2>
+        <p class="text-xs text-slate-400">Marca si padeces o has padecido alguna de estas condiciones:</p>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+          <label class="flex items-center gap-2 bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl"><input type="checkbox" class="chk-enf" value="Diabetes"> Diabetes</label>
+          <label class="flex items-center gap-2 bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl"><input type="checkbox" class="chk-enf" value="Hipertensión"> Hipertensión</label>
+          <label class="flex items-center gap-2 bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl"><input type="checkbox" class="chk-enf" value="Problemas cardíacos"> Corazón / Heart</label>
+          <label class="flex items-center gap-2 bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl"><input type="checkbox" class="chk-enf" value="Asma"> Asma / Asthma</label>
+          <label class="flex items-center gap-2 bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl"><input type="checkbox" class="chk-enf" value="Problemas de coagulación"> Coagulación</label>
+          <label class="flex items-center gap-2 bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl"><input type="checkbox" class="chk-enf" value="Gastritis / Reflujo"> Gastritis</label>
+        </div>
+        <input id="hAlergias" placeholder="Alergias (Penicilina, Látex, Anestesia, Yodo, Ninguna)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-3 text-sm">
+        <input id="hMeds" placeholder="¿Tomas algún medicamento actualmente? ¿Cuál?" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-3 text-sm">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <input id="hHeredo" placeholder="Antecedentes familiares (padres/abuelos)" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-3 text-sm">
+          <select id="hEmbarazo" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-3 text-sm">
+            <option value="NO">¿Embarazo o lactancia? No / N/A</option>
+            <option value="SI - Embarazo">Sí, embarazo</option>
+            <option value="SI - Lactancia">Sí, lactancia</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 4. HÁBITOS Y SALUD BUCAL -->
+      <div class="space-y-3 pt-3 border-t border-slate-800">
+        <h2 data-i18n="s4" class="text-xs font-bold uppercase tracking-wider text-cyan-400">4. Hábitos y Salud Bucal</h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+          <label class="flex items-center gap-2 bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl"><input type="checkbox" class="chk-hab" value="Tabaquismo"> Fuma / Smokes</label>
+          <label class="flex items-center gap-2 bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl"><input type="checkbox" class="chk-hab" value="Alcohol frecuente"> Alcohol</label>
+          <label class="flex items-center gap-2 bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl"><input type="checkbox" class="chk-hab" value="Bruxismo"> Rechina dientes</label>
+          <label class="flex items-center gap-2 bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl"><input type="checkbox" class="chk-sint" value="Sangrado de encías"> Sangrado encías</label>
+          <label class="flex items-center gap-2 bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl"><input type="checkbox" class="chk-sint" value="Sensibilidad dental"> Sensibilidad</label>
+          <label class="flex items-center gap-2 bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl"><input type="checkbox" class="chk-sint" value="Dolor mandibular"> Dolor mandíbula</label>
+        </div>
+        <select id="hHigiene" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-3 text-sm">
+          <option value="Cepillado 3 veces/día + hilo dental">Cepillado 3 veces al día + hilo dental</option>
+          <option value="Cepillado 2 veces/día">Cepillado 2 veces al día</option>
+          <option value="Cepillado 1 vez/día">Cepillado 1 vez al día</option>
+        </select>
+      </div>
+
+      <!-- 5. FIRMA DIGITAL Y CONSENTIMIENTO -->
+      <div class="space-y-3 pt-3 border-t border-slate-800">
+        <h2 data-i18n="s5" class="text-xs font-bold uppercase tracking-wider text-emerald-400">5. Firma Digital y Consentimiento Informado</h2>
+        <div class="bg-slate-950 border border-slate-700 rounded-2xl p-2">
+          <canvas id="sigCanvas" class="w-full h-36 rounded-xl bg-slate-900 touch-none cursor-crosshair"></canvas>
+          <div class="flex justify-between items-center px-2 pt-1.5">
+            <span class="text-[11px] text-slate-500">Firma con tu dedo o mouse dentro del recuadro</span>
+            <button type="button" onclick="clearSignature()" class="text-xs text-cyan-400 hover:underline">Limpiar firma</button>
+          </div>
+        </div>
+        <label class="flex items-start gap-2.5 text-xs text-slate-300">
+          <input id="hAcepto" type="checkbox" required class="mt-0.5 rounded bg-slate-900 border-slate-600">
+          <span>Declaro que la información médica proporcionada es verídica y autorizo la valoración clínica odontológica conforme a la NOM-004 y NOM-013.</span>
+        </label>
+      </div>
+
+      <button id="btnSend" type="submit" class="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold py-3.5 rounded-xl text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20">
+        <i data-lucide="send" class="w-4 h-4"></i> Enviar Historia Clínica
+      </button>
+    </form>
+
+    <!-- ÉXITO -->
+    <div id="okCard" class="hidden glass-card rounded-3xl p-8 text-center space-y-4 border-emerald-500/40">
+      <div class="w-16 h-16 mx-auto rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+        <i data-lucide="check" class="w-9 h-9"></i>
+      </div>
+      <h2 class="text-2xl font-bold text-white">¡Historia Clínica Registrada!</h2>
+      <p class="text-sm text-slate-300">Tu expediente ya está disponible para el odontólogo. Gracias por tu tiempo.</p>
+    </div>
+
+    <footer class="pt-2 flex items-center justify-center gap-2.5 xicosoft-badge">
+      <span class="text-[11px] text-slate-500">Expediente digital por</span>
+      <img src="assets/xicosoft.jpg" alt="Xicosoft" class="h-7 rounded-md object-contain">
+    </footer>
+  </div>
+
+  <script>
+    const API_URL = 'https://script.google.com/macros/s/AKfycbxWtJRZLdqe19FY9juUoTp1i6p7FKQ-rnUwpp9dIeQ6_epXc_HkBMz20vWmvnkN36uFSQ/exec';
+    const CLINIC_ID = new URLSearchParams(window.location.search).get('clinic') || 'CLINIC-001';
+    let LANG = 'ES';
+
+    // Canvas Firma Táctil
+    const canvas = document.getElementById('sigCanvas');
+    const ctx = canvas.getContext('2d');
+    let drawing = false;
+    function resizeCanvas() {
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+    }
+    window.addEventListener('resize', resizeCanvas);
+    setTimeout(resizeCanvas, 100);
+
+    function getPos(e) {
+      const r = canvas.getBoundingClientRect();
+      const t = e.touches ? e.touches[0] : e;
+      return { x: t.clientX - r.left, y: t.clientY - r.top };
+    }
+    canvas.addEventListener('mousedown', e => { drawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
+    canvas.addEventListener('mousemove', e => { if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); });
+    window.addEventListener('mouseup', () => drawing = false);
+    canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
+    canvas.addEventListener('touchmove', e => { e.preventDefault(); if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); });
+    canvas.addEventListener('touchend', () => drawing = false);
+    function clearSignature() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+
+    function setLang(l) {
+      LANG = l;
+      document.getElementById('btnES').className = l === 'ES' ? 'px-3 py-1.5 rounded-lg bg-cyan-500 text-slate-950' : 'px-3 py-1.5 rounded-lg text-slate-400';
+      document.getElementById('btnEN').className = l === 'EN' ? 'px-3 py-1.5 rounded-lg bg-cyan-500 text-slate-950' : 'px-3 py-1.5 rounded-lg text-slate-400';
+    }
+
+    async function callApi(action, ...args) {
+      const r = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action, args })
+      });
+      return await r.json();
+    }
+
+    (async () => {
+      try {
+        const res = await callApi('apiPublicGetBookingInit', CLINIC_ID);
+        if (res.status === 'success') {
+          document.getElementById('clinicTitle').textContent = res.data.consultorio.Nombre;
+        }
+      } catch (e) {}
+    })();
+
+    document.getElementById('historiaForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('btnSend');
+      const errBox = document.getElementById('errBox');
+      errBox.classList.add('hidden');
+      btn.disabled = true;
+
+      const getChecked = (cls) => Array.from(document.querySelectorAll(cls + ':checked')).map(c => c.value).join(', ');
+      try {
+        const res = await callApi('apiPublicSubmitHistoria', {
+          Consultorio_ID: CLINIC_ID,
+          Idioma: LANG,
+          Nombre: document.getElementById('hNombre').value,
+          Telefono: document.getElementById('hTel').value,
+          Fecha_Nacimiento: document.getElementById('hNac').value,
+          Sexo: document.getElementById('hSexo').value,
+          Email: document.getElementById('hEmail').value,
+          Domicilio: document.getElementById('hDomicilio').value,
+          Contacto_Emergencia: document.getElementById('hEmergencia').value,
+          Motivo_Consulta: document.getElementById('hMotivo').value,
+          Antecedentes_Heredofamiliares: document.getElementById('hHeredo').value,
+          Enfermedades_Actuales: getChecked('.chk-enf'),
+          Medicamentos_Actuales: document.getElementById('hMeds').value,
+          Alergias_Detalle: document.getElementById('hAlergias').value,
+          Embarazo_Lactancia: document.getElementById('hEmbarazo').value,
+          Habitos_Riesgo: getChecked('.chk-hab'),
+          Higiene_Bucal: document.getElementById('hHigiene').value,
+          Sintomas_Bucales: getChecked('.chk-sint'),
+          Firma_Aceptada: document.getElementById('hAcepto').checked
+        });
+        btn.disabled = false;
+        if (res.status === 'error') {
+          errBox.textContent = res.message;
+          errBox.classList.remove('hidden');
+          return;
+        }
+        document.getElementById('historiaForm').classList.add('hidden');
+        document.getElementById('okCard').classList.remove('hidden');
+        lucide.createIcons();
+      } catch (err) {
+        btn.disabled = false;
+        errBox.textContent = 'Error de conexión. Intenta nuevamente.';
+        errBox.classList.remove('hidden');
+      }
+    });
+
+    lucide.createIcons();
+  </script>
+</body>
+</html>
